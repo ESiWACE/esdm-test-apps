@@ -1,0 +1,10 @@
+Prerequisites
+ * Install ESDM
+ * Install ESDM-NetCDF
+
+Create the DSL code version
+ $ ./compile.sh
+
+To compile the actual code and run
+$ cd CPU3D_target
+$ ./runmpi.sh
