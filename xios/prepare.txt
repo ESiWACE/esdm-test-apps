@@ -1,0 +1,38 @@
+#!/bin/bash
+
+Prerequisites
+ * Install ESDM
+ * Install ESDM-NetCDF
+ * Install NetCDF-Fortran interface
+
+Checkout XIOS code
+$ svn checkout http://forge.ipsl.jussieu.fr/ioserver/svn/XIOS/trunk
+
+Modify bld.cfg:
+Add
+bld::tool::cflags the ESDM include directory (of the installation)
+bld::tool::ldflags the ESDM lib directory and it as rpath -Wl,--rpath=/home/kunkel/ur-git/esiwace/ESD-Middleware/install/lib
+
+Modify arch.env:
+Change the NetCDF directory to the ESDM dir
+
+$ sudo ln -s /usr/bin/make /usr/bin/gmake
+$ ./make_xios --dev --arch GCC_LINUX
+
+Check that the proper NetCDF library was linked:
+$ ldd bin/test_client.exe |grep netcdf
+This should output the NetCDF library created from ESDM
+
+Fix iodef file:
+$ cp inputs/iodef.xml .
+Change  <file id="output" name="esdm://output" enabled=".TRUE.">
+
+Create ESDM configuration file in the local directory
+$ cp ESD-Middleware/src/test/esdm.conf .
+
+Create ESDM data directories
+$ export PATH=.../ESD-Middleware/install/bin/:$PATH
+$ mkfs.esdm -g -l --create  --remove --help--ignore-errors
+
+Run XIOS MPMD with OpenMPI:
+$ mpiexec -np 2 bin/xios_server.exe : -np 3 bin/test_client.exe
