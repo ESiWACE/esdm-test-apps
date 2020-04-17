@@ -144,11 +144,15 @@ uint64_t com3_checksum(GRID* g)
             ret += (uint64_t)gv_ind2Dvar[edge];
             ret += (uint64_t)gv_ind3Dvar[edge];
     }
-    return ret;  
+    return ret;
 }
 
 void com3_cleanup(GRID* g)
 {
+    io_cleanup(& io_gv_vi);
+    io_cleanup(& io_gv_ind2Dvar);
+    io_cleanup(& io_gv_ind3Dvar);
+
     com3.loaded = 0;
     DEALLOC gv_vi;
     DEALLOC gv_ind2Dparam;

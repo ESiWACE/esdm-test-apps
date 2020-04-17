@@ -1,3 +1,5 @@
+#ifndef USE_ESDM
+
 #include <netcdf.h>
 
 #include "grid.h"
@@ -29,11 +31,11 @@ void InitIOBuffers(GRID *g)
 	CellBuffer2D = malloc((sizeof(float *)*g->height));
 	for (int i = 0; i < g->height; i++)
 	    CellBuffer2D[i] = malloc((sizeof(float)*g->cellCount));
-	
+
 	EdgeBuffer2D = malloc((sizeof(float *)*g->height));
 	for (int i = 0; i < g->height; i++)
 	    EdgeBuffer2D[i] = malloc((sizeof(float)*g->edgeCount));
-	
+
 	CellBuffer1D = malloc((sizeof(float)*g->cellCount));
 	EdgeBuffer1D = malloc((sizeof(float)*g->edgeCount));
 	IOBuffersInitialized = 1;
@@ -52,7 +54,7 @@ void FreeIOBuffers(GRID *g)
 
 	free(CellBuffer1D);
 	free(EdgeBuffer1D);
-    
+
 	free(CellBuffer2D);
 	free(EdgeBuffer2D);
 	IOBuffersInitialized = 0;
@@ -83,21 +85,21 @@ void io_write_init(GRID *g, const char* filename){
     Error = nc_create(filename, NC_CLOBBER, &ncid_w); //| NC_NETCDF4
     PrintErrorAndExit(Error);
     int DimHeight,DimCell,DimEdge;
-	
+
     Error = nc_def_dim(ncid_w, "height", g->height,     &DimHeight);
     PrintErrorAndExit(Error);
     Error = nc_def_dim(ncid_w, "cell",   g->cellCount, &DimCell);
     PrintErrorAndExit(Error);
     Error = nc_def_dim(ncid_w, "edge",   g->edgeCount, &DimEdge);
     PrintErrorAndExit(Error);
-	
+
     // Create 2D dimensions
     Dims_2D_Cell[0] = DimHeight;
     Dims_2D_Cell[1] = DimCell;
-	
+
     Dims_2D_Edge[0] = DimHeight;
     Dims_2D_Edge[1] = DimEdge;
-	
+
     // Create 1D dimensions
     Dims_1D_Cell[0] = DimCell;
     Dims_1D_Edge[0] = DimEdge;
@@ -122,14 +124,14 @@ void io_read_register(GRID *g, const char * variable_name, GVAL * out_buff,
     // Get the variable ID based on its name
     int Error = nc_inq_varid(ncid_r, variable_name, &varid);
     PrintErrorAndExit(Error);
-    
+
     // Check the position and dimesion
     int Pos, Dim;
     Error = nc_get_att_int(ncid_r, varid, "position",  &Pos);
     PrintErrorAndExit(Error);
     Error = nc_get_att_int(ncid_r, varid, "dimension", &Dim);
     PrintErrorAndExit(Error);
-    
+
     assert(Pos == var_pos);
     assert(Dim == var_dim);
 
@@ -144,7 +146,7 @@ void io_read_register(GRID *g, const char * variable_name, GVAL * out_buff,
 		size_t Count[] = {1,g->cellCount};
 		Error = nc_get_vara_float(ncid_r, varid, Start, Count, &CellBuffer2D[h][0]);
 	    }
-	    
+
 	    GVAL CELL 3D var = (GVAL *restrict*restrict*restrict) out_buff;
 
 	    /* TODO: find out why memcpy does not work
@@ -155,7 +157,7 @@ void io_read_register(GRID *g, const char * variable_name, GVAL * out_buff,
 		memcpy(&var[cell],&CellBuffer2D[cell.height][cell.block*g->blkSize], ce);
 	    }
 	    */
-	    
+
 	    FOREACH cell IN grid
 	    {
 		var[cell] = CellBuffer2D[cell.height][(cell.block*g->blkSize)+cell.cell];
@@ -193,7 +195,7 @@ void io_read_register(GRID *g, const char * variable_name, GVAL * out_buff,
 	if(var_pos == GRID_POS_CELL)
 	{
 	    Error = nc_get_var_float(ncid_r, varid, &CellBuffer1D[0]);
-	    
+
 	    GVAL CELL 2D var = (GVAL *restrict*restrict) out_buff;
 	    /*
 	    FOREACH cell IN gridCELL2D | cell{0..0}
@@ -211,7 +213,7 @@ void io_read_register(GRID *g, const char * variable_name, GVAL * out_buff,
 	else
 	{
 	    Error = nc_get_var_float(ncid_r, varid, &EdgeBuffer1D[0]);
-	    
+
 	    GVAL EDGE 2D var = (GVAL *restrict*restrict) out_buff;
 	    /*
 	    FOREACH edge IN gridEDGE2D | edge{0..0}
@@ -239,15 +241,15 @@ void io_write_define(GRID *g, const char * variable_name, GVAL * out_buff,
 		     GRID_VAR_DIMENSION var_dim, io_var_t * out_varid)
 {
     int ret,Error;
-	
-    int *Dims_2D = Dims_2D_Cell; 
+
+    int *Dims_2D = Dims_2D_Cell;
     int *Dims_1D = Dims_1D_Cell;
     if(var_pos == GRID_POS_EDGE)
     {
 	Dims_2D = Dims_2D_Edge;
 	Dims_1D = Dims_1D_Edge;
     }
-	
+
     //TODO: implement other datatypes!
     assert(file_type == FLOAT32);
     if(var_dim == GRID_DIM_3D)
@@ -266,7 +268,7 @@ void io_write_define(GRID *g, const char * variable_name, GVAL * out_buff,
     out_varid->Name = variable_name;
 
     // Write out attributes
-    Error = nc_put_att_int(ncid_w, out_varid->id, "position", NC_INT,1,(int *)&(out_varid->Pos));	
+    Error = nc_put_att_int(ncid_w, out_varid->id, "position", NC_INT,1,(int *)&(out_varid->Pos));
     PrintErrorAndExit(Error);
     Error = nc_put_att_int(ncid_w, out_varid->id, "dimension", NC_INT,1,(int *)&(out_varid->Dim));
     PrintErrorAndExit(Error);
@@ -290,7 +292,7 @@ void io_write_announce(GRID *g, io_var_t * var)
 
 	if(Id == var->id)
 	    isEnqueued = 1;
-	
+
 	if(Cur == ArrayCount(WriteQueue.Elements)-1)
 	    isLooped = 0;
         Cur = ((Cur+1)%(ArrayCount(WriteQueue.Elements)));
@@ -334,7 +336,7 @@ void io_write_start(GRID *g)
 	{
 	    size_t Start[2];
 	    size_t Count[2];
-	    
+
 	    if(IoVar.Pos == GRID_POS_CELL)
 	    {
 		GVAL CELL 3D p = IoVar.memory;
@@ -344,7 +346,7 @@ void io_write_start(GRID *g)
 		{
 		    int cb,ce;
 		    get_indices_c(g,cell.block,&cb,&ce);
-		    // Buffer = CellBuffer2D;		   
+		    // Buffer = CellBuffer2D;
 		    memcpy(&Buffer[cell.height][cell.block*g->blkSize], &p[cell], ce);
 		}
 		*/
@@ -377,14 +379,14 @@ void io_write_start(GRID *g)
 		{
 		    EdgeBuffer2D[edge.height][(edge.block*g->blkSize)+edge.edge] = p[edge];
 		}
-		
+
 		for(int h = 0; h < g->height; h++)
 		{
 		    size_t Start[] = {h,0};
 		    size_t Count[] = {1,g->edgeCount};
 		    Error = nc_put_vara_float(ncid_w, IoVar.id, Start, Count,&EdgeBuffer2D[h][0]);
 		}
-	    }	   
+	    }
 	    //Error = nc_put_var_float(ncid_w, IoVar.id, &Buffer[0][0]);
 	}
 	else
@@ -438,6 +440,9 @@ void io_write_start(GRID *g)
     }
 }
 
+void io_cleanup(io_var_t * var){
+  // No OP
+}
 
 void io_write_finalize(GRID *g)
 {
@@ -445,3 +450,4 @@ void io_write_finalize(GRID *g)
     nc_close(ncid_w);
 }
 
+#endif

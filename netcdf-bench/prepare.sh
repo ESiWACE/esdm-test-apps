@@ -1,4 +1,4 @@
-#!/bin/bash -e
+  #!/bin/bash -e
 
 echo "Try to setup NetCDF benchmark for a system test"
 
@@ -10,7 +10,8 @@ if [[ ! -d netcdf-bench ]] ; then
   git clone https://github.com/joobog/netcdf-bench.git
 fi
 
-NETCDF_DIR="$HOME/esdm/install"
+source ../source.sh
+NETCDF_DIR="$ESDM_INSTALL_DIR"
 
 if [[ ! -d build ]] ; then
   mkdir build

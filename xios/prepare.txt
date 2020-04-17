@@ -32,7 +32,7 @@ $ cp ESD-Middleware/src/test/esdm.conf .
 
 Create ESDM data directories
 $ export PATH=.../ESD-Middleware/install/bin/:$PATH
-$ mkfs.esdm -g -l --create  --remove --help--ignore-errors
+$ mkfs.esdm -g -l --create  --remove --ignore-errors
 
 Run XIOS MPMD with OpenMPI:
 $ mpiexec -np 2 bin/xios_server.exe : -np 3 bin/test_client.exe

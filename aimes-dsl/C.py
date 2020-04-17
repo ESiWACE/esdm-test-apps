@@ -8,10 +8,10 @@
 import re
 import os
 class language:
-    
+
     def __init__(self,DSL):
         self.storage_class_specifiers = ['typedef','extern','static','auto','register','inline']
-        self.type_specifiers=['void','char','short','int','long','float','double','_Bool','_Complex','signed','unsigned']
+        self.type_specifiers=['void','char','short','int','long','float','double','_Bool','_Complex','signed','unsigned', 'esdm_dataset_t', 'esdm_container_t', 'esdm_status']
         self.type_qualifiers=['const','restrict','volatile']
         self.keywords=self.storage_class_specifiers+self.type_specifiers+self.type_qualifiers+['for','while','do','sizeof','if','switch','case','return']
         self.currentPos = 0
@@ -20,7 +20,7 @@ class language:
         self.pragmas=[]
         self.DSL = DSL
         self.fileName = ''
-        
+
     def readSource(self,filename):
         self.fileName = filename
         filevar = open(filename)
@@ -53,14 +53,7 @@ class language:
                 nfn = m.group(1).strip()
                 if os.path.exists(self.includePaths[0]+'/'+nfn):
                     self.handleIncludeFile(self.includePaths[0]+'/'+nfn)
-            '''m=re.search(r'#\s*include\s*<(.+?)>',pText,flags=re.M|re.S)
-            if m!=None:
-                nfn = m.group(1).strip()
-                for sp in self.includePaths:
-                    if os.path.exists(sp+'/'+nfn):#postpone until ifdef switches are handled
-                        #self.handleIncludeFile(sp+'/'+nfn)
-                        break'''
-                    
+
     def handleIncludeFile(self,filename):
         newDSLObj = self.DSL.__class__(self.DSL.confFileName)
         newDSLObj.readSource(filename)
@@ -87,7 +80,7 @@ class language:
         err = err + '] in line [' + str(el[0]) + '], ' + errText + ': ' + el[1]
         print err
         exit(1)
-        
+
     def errorLine(self):
         ln = 1
         lb = 0
@@ -104,13 +97,13 @@ class language:
         return [ln,src]
 
     def skipSpaces(self):
-        mr = re.match('(\s*)', self.srcCode[self.currentPos:], re.S)
+        mr = re.match('(\s*(#.*)?)', self.srcCode[self.currentPos:], re.S)
         if mr:
             self.currentPos = self.currentPos + mr.end(1)
             return mr.group(1)
         return None
 
-   
+
     def checkType(self):
         for ty in self.type_specifiers:
             if self.checkSymbol(ty):
@@ -128,8 +121,8 @@ class language:
                 self.currentPos = revert
                 return None
         return symb
-        
-        
+
+
 
     def checkSymbol(self,symbol):
         mr = re.match('('+symbol+')', self.srcCode[self.currentPos:], re.S)
@@ -142,14 +135,14 @@ class language:
         self.dsl_declaration = False
         revert = self.currentPos
         ret=[self.currentPos,'declaration']
-        
+
         self.skipSpaces()
         symb = self.declaration_specifiers()
         if symb==None:
             self.currentPos=revert
             return None
         ret.append(symb)
-        
+
         revert = self.currentPos
         self.skipSpaces()
         symb = self.init_declarator_list()
@@ -166,7 +159,7 @@ class language:
 
         if self.dsl_declaration == True:
             ret = self.DSL.translate_declaration(ret,'declaration')
-        
+
         if ret[2][2]=='typedef':
             self.type_specifiers.append(ret[3][2][2][2][2])
 
@@ -175,7 +168,7 @@ class language:
     def declaration_specifiers(self):
         revert = self.currentPos
         ret=[self.currentPos,'declaration_specifiers']
-        
+
         while True:
             self.skipSpaces()
             symb = self.storage_class_specifier()
@@ -202,7 +195,7 @@ class language:
     def init_declarator_list(self):
         revert = self.currentPos
         ret=[self.currentPos,'init_declarator_list']
-        
+
         self.skipSpaces()
         symb = self.init_declarator()
         if symb!=None:
@@ -223,18 +216,18 @@ class language:
     def init_declarator(self):
         revert = self.currentPos
         ret=[self.currentPos,'init_declarator']
-        
+
         self.skipSpaces()
         symb = self.declarator()
         if symb==None:
-            return None            
+            return None
         ret.append(symb)
-        
+
         self.skipSpaces()
         symb = self.checkSymbol('=')
         if symb==None:
             return ret
-        
+
         self.skipSpaces()
         symb = self.initializer()
         if symb==None:
@@ -242,7 +235,7 @@ class language:
             return ret
         ret.append(symb)
         return ret
-        
+
     def storage_class_specifier(self):
         for i in self.storage_class_specifiers:
             if self.checkSymbol(i)!=None:
@@ -256,13 +249,13 @@ class language:
             if symb!=None:
                 self.dsl_declaration = True
                 return symb
-        
+
         for i in self.type_specifiers:
             m = re.match('('+i+')[^0-9a-zA-Z_]', self.srcCode[self.currentPos:], re.S)
             if m:
                 self.currentPos = self.currentPos + m.end(1)
                 return i
-            
+
         self.skipSpaces()
         symb = self.struct_or_union_specifier()
         if symb!=None:
@@ -271,7 +264,7 @@ class language:
         symb = self.enum_specifier()
         if symb!=None:
             return symb
-        
+
         return None
 
     def type_qualifier(self):
@@ -283,7 +276,7 @@ class language:
     def struct_or_union_specifier(self):
         revert = self.currentPos
         ret=[self.currentPos,]
-        
+
         self.skipSpaces()
         symb = self.checkSymbol('struct')
         if symb==None:
@@ -297,28 +290,29 @@ class language:
         if symb==None:
             symb = ''
         ret.append(symb)#add name or empty for non-named
-        
+
         self.skipSpaces()
         symb = self.checkSymbol('\{')
         if symb==None:
             return ret
-        
+
         self.skipSpaces()
         symb = self.struct_declaration_list()
         if symb!=None:
             ret.append(symb)
 
         self.skipSpaces()
+
         symb = self.checkSymbol('\}')
         if symb==None:
-            self.reportError('expected } to end struct/union') 
-        
+            self.reportError('expected } to end struct/union')
+
         return ret
 
     def struct_declaration_list(self):
         revert = self.currentPos
         ret=[self.currentPos,'struct_declaration_list']
-        
+
         while True:
             self.skipSpaces()
             symb = self.struct_declaration()
@@ -333,14 +327,14 @@ class language:
         self.dsl_declaration = False
         revert = self.currentPos
         ret=[self.currentPos,'struct_declaration']
-        
+
         self.skipSpaces()
         symb = self.specifier_qualifier_list()
         if symb==None:
             self.currentPos=revert
             return None
         ret.append(symb)
-        
+
         self.skipSpaces()
         symb = self.struct_declarator_list()
         if symb==None:
@@ -351,9 +345,9 @@ class language:
         self.skipSpaces()
         symb = self.checkSymbol(';')
         if symb==None:
-            self.reportError('expected ;') 
+            self.reportError('expected ;')
             return None
-        
+
         if self.dsl_declaration == True:
             ret = self.DSL.translate_declaration(ret,'struct_declaration')
         return ret
@@ -361,7 +355,7 @@ class language:
     def specifier_qualifier_list(self):
         revert = self.currentPos
         ret=[self.currentPos,'specifier_qualifier_list']
-        
+
         while True:
             self.skipSpaces()
             symb = self.type_specifier()
@@ -382,7 +376,7 @@ class language:
     def struct_declarator_list(self):
         revert = self.currentPos
         ret=[self.currentPos,'struct_declarator_list']
-        
+
         self.skipSpaces()
         symb = self.struct_declarator()
         if symb!=None:
@@ -403,12 +397,12 @@ class language:
     def struct_declarator(self):
         revert = self.currentPos
         ret=[self.currentPos,'struct_declarator']#needed?
-        
+
         self.skipSpaces()
         symb = self.declarator()
         if symb!=None:
             ret.append(symb)
-        
+
         self.skipSpaces()
         symb = self.checkSymbol(':')
         if symb!=None:
@@ -417,7 +411,7 @@ class language:
             if symb==None:
                 self.reportError('value needed after colon(:)')
             ret.append(symb)
-        
+
         if len(ret)==2:
             return None
         return ret
@@ -425,7 +419,7 @@ class language:
     def enum_specifier(self):
         revert = self.currentPos
         ret=[self.currentPos,'enum']
-        
+
         self.skipSpaces()
         symb = self.checkSymbol('enum')
         if symb==None:
@@ -436,12 +430,12 @@ class language:
         if symb==None:
             symb = ''
         ret.append(symb)#add name or empty for non-named
-        
+
         self.skipSpaces()
         symb = self.checkSymbol('\{')
         if symb==None:
             return ret
-        
+
         self.skipSpaces()
         symb = self.enumerator_list()
         if symb==None:
@@ -451,16 +445,17 @@ class language:
         ret.append(symb)
 
         self.skipSpaces()
+
         symb = self.checkSymbol('\}')
         if symb==None:
             self.reportError('expected } to end struct/union')
-        
+
         return ret
 
     def enumerator_list(self):
         revert = self.currentPos
         ret=[self.currentPos,'enumerator_list']
-        
+
         self.skipSpaces()
         symb = self.enumerator()
         if symb!=None:
@@ -481,48 +476,48 @@ class language:
     def enumerator(self):
         revert = self.currentPos
         ret=[self.currentPos,'enumerator']
-        
+
         self.skipSpaces()
         symb = self.checkID()
         if symb==None:
             return None
         ret.append(symb)
-        
+
         self.skipSpaces()
         symb = self.checkSymbol('=')
         if symb==None:
             return ret
-        
+
         self.skipSpaces()
         symb = self.constant_expression()
         if symb==None:
             self.reportError('expected constant value after =')
         ret.append(symb)
-        
+
         return ret
 
     def declarator(self):
         revert = self.currentPos
         ret=[self.currentPos,'declarator']
-        
+
         self.skipSpaces()
         symb = self.pointer()
         if symb!=None:
             ret.append(symb)
-        
+
         self.skipSpaces()
         symb = self.direct_declarator()
         if symb==None:
             self.currentPos = revert
             return None
         ret.append(symb)
-        
+
         return ret
 
     def direct_declarator(self):
         revert = self.currentPos
         ret=[self.currentPos,'direct_declarator']
-        
+
         self.skipSpaces()
         symb = self.checkID()
         if symb!=None:
@@ -543,7 +538,7 @@ class language:
             if symb==None:
                 self.currentPos = revert
                 return None
-            
+
         while True:
             self.skipSpaces()
             symb = self.checkSymbol('\[')
@@ -560,7 +555,7 @@ class language:
                 if symb!=None:
                     continue
                 else:
-                    self.reportError('expected ]') 
+                    self.reportError('expected ]')
                     return None
             else:
                 self.skipSpaces()
@@ -584,22 +579,22 @@ class language:
                     if symb!=None:
                         continue
                     else:
-                        self.reportError('expected )') 
+                        self.reportError('expected )')
                         return None
             break
         return ret
-                    
+
     def pointer(self):
         revert = self.currentPos
         ret=[self.currentPos,'pointer']
-        
+
         while True:
             self.skipSpaces()
             symb = self.checkSymbol('\*')
             if symb==None:
                 break
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.type_qualifier_list()
             if symb!=None:
@@ -607,11 +602,11 @@ class language:
         if len(ret)==2:
             return None
         return ret
-        
+
     def type_qualifier_list(self):
         revert = self.currentPos
         ret=[]
-        
+
         while True:
             self.skipSpaces()
             symb = self.type_qualifier()
@@ -625,23 +620,23 @@ class language:
     def parameter_type_list(self):
         revert = self.currentPos
         ret=[self.currentPos,'parameter_type_list']
-        
+
         self.skipSpaces()
         symb = self.parameter_list()
         if symb==None:
             return None
         ret.append(symb)
-        
+
         self.skipSpaces()
         symb = self.checkSymbol(',')
         if symb!=None:
             self.skipSpaces()
             symb = self.checkSymbol('\.\.\.')
             if symb==None:
-                self.reportError('expected parameter or (...)') 
+                self.reportError('expected parameter or (...)')
                 return None
             ret.append(symb)
-        
+
         if len(ret)==2:
             return None
         return ret
@@ -649,7 +644,7 @@ class language:
     def parameter_list(self):
         revert = self.currentPos
         ret=[self.currentPos,'parameter_list']
-        
+
         self.skipSpaces()
         symb = self.parameter_declaration()
         if symb!=None:
@@ -671,13 +666,13 @@ class language:
     def parameter_declaration(self):
         revert = self.currentPos
         ret=[self.currentPos,'parameter_declaration']
-        
+
         self.skipSpaces()
         symb = self.declaration_specifiers()
         if symb==None:
             return None
         ret.append(symb)
-        
+
         self.skipSpaces()
         symb = self.declarator()
         if symb==None:
@@ -689,7 +684,7 @@ class language:
     def identifier_list(self):
         revert = self.currentPos
         ret=[self.currentPos,'identifier_list']
-        
+
         self.skipSpaces()
         symb = self.checkID()
         if symb!=None:
@@ -702,7 +697,7 @@ class language:
                 self.skipSpaces()
                 symb = self.checkID()
                 if symb==None:
-                    self.reportError('expected identifier') 
+                    self.reportError('expected identifier')
                     return None
                 ret.append(symb)
         return None
@@ -710,13 +705,13 @@ class language:
     def type_name(self):
         revert = self.currentPos
         ret=[self.currentPos,'type_name']
-        
+
         self.skipSpaces()
         symb = self.specifier_qualifier_list()
         if symb==None:
             return None
         ret.append(symb)
-        
+
         self.skipSpaces()
         symb = self.abstract_declarator()
         if symb!=None:
@@ -726,17 +721,17 @@ class language:
     def abstract_declarator(self):
         revert = self.currentPos
         ret=[self.currentPos,'abstract_declarator']
-        
+
         self.skipSpaces()
         symb = self.pointer()
         if symb!=None:
             ret.append(symb)
-        
+
         self.skipSpaces()
         symb = self.direct_abstract_declarator()
         if symb!=None:
             ret.append(symb)
-            
+
         if len(ret)==2:
             return None
         return ret
@@ -744,7 +739,7 @@ class language:
     def direct_abstract_declarator(self):
         revert = self.currentPos
         ret=[self.currentPos,'direct_abstract_declarator']#??
-        
+
         self.skipSpaces()
         symb = self.checkSymbol('\(')
         if symb!=None:
@@ -763,7 +758,7 @@ class language:
             self.skipSpaces()
             symb = self.checkSymbol('\)')
             if symb==None:
-                self.reportError('expected )') 
+                self.reportError('expected )')
                 return None
         else:
             symb = self.checkSymbol('\[')
@@ -779,7 +774,7 @@ class language:
             self.skipSpaces()
             symb = self.checkSymbol('\]')
             if symb==None:
-                self.reportError('expected ]') 
+                self.reportError('expected ]')
                 return None
 
         while True:
@@ -798,7 +793,7 @@ class language:
                 if symb!=None:
                     continue
                 else:
-                    self.reportError('expected ]') 
+                    self.reportError('expected ]')
                     return None
             else:
                 self.skipSpaces()
@@ -816,7 +811,7 @@ class language:
                     if symb!=None:
                         continue
                     else:
-                        self.reportError('expected )') 
+                        self.reportError('expected )')
                         return None
             break
         return ret
@@ -824,17 +819,17 @@ class language:
     def initializer(self):
         revert = self.currentPos
         ret=[self.currentPos,'initializer']
-        
+
         self.skipSpaces()
         symb = self.assignment_expression()
         if symb!=None:
             ret.append(symb)
             return ret
-        
+
         symb = self.checkSymbol('\{')
         if symb==None:
             return None
-        
+
         self.skipSpaces()
         symb = self.initializer_list()
         if symb==None:
@@ -849,15 +844,15 @@ class language:
         self.skipSpaces()
         symb = self.checkSymbol('\}')
         if symb==None:
-            self.reportError('expected }') 
+            self.reportError('expected }')
             return None
-        
+
         return ret
 
     def initializer_list(self):
         revert = self.currentPos
         ret=[self.currentPos,'initializer_list']
-        
+
         self.skipSpaces()
         symb = self.initializer()
         if symb!=None:
@@ -880,7 +875,7 @@ class language:
     def statement(self):
         revert = self.currentPos
         ret=[self.currentPos,'statement']
-        
+
         self.skipSpaces()
         if self.DSL!=None:
             symb = self.DSL.statement()
@@ -893,7 +888,7 @@ class language:
         if symb!=None:
             ret.append(symb)
             return ret
-        
+
         symb = self.compound_statement()
         if symb!=None:
             ret.append(symb)
@@ -903,7 +898,7 @@ class language:
         if symb!=None:
             ret.append(symb)
             return ret
-        
+
         symb = self.selection_statement()
         if symb!=None:
             ret.append(symb)
@@ -918,36 +913,36 @@ class language:
         if symb!=None:
             ret.append(symb)
             return ret
-        
+
         self.currentPos = revert
         return None
 
     def labeled_statement(self):
         revert = self.currentPos
         ret=[self.currentPos,'labeled_statement']#??
-        
+
         self.skipSpaces()
         symb = self.checkSymbol('case')
         if symb!=None:
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.constant_expression()
             if symb==None:
-                self.reportError('case needes a constant expression') 
+                self.reportError('case needes a constant expression')
                 return None
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.checkSymbol(':')
             if symb==None:
-                self.reportError('expected : in case statement') 
+                self.reportError('expected : in case statement')
                 return None
 
             self.skipSpaces()
             symb = self.statement()
             if symb==None:
-                self.reportError('a statement expected in case statement') 
+                self.reportError('a statement expected in case statement')
                 return None
             ret.append(symb)
 
@@ -956,17 +951,17 @@ class language:
         symb = self.checkSymbol('default')
         if symb!=None:
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.checkSymbol(':')
             if symb==None:
-                self.reportError('expected : in case statement') 
+                self.reportError('expected : in case statement')
                 return None
 
             self.skipSpaces()
             symb = self.statement()
             if symb==None:
-                self.reportError('a statement expected in case statement') 
+                self.reportError('a statement expected in case statement')
                 return None
             ret.append(symb)
 
@@ -975,7 +970,7 @@ class language:
         symb = self.checkID()
         if symb!=None:
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.checkSymbol(':')
             if symb==None:
@@ -985,23 +980,23 @@ class language:
             self.skipSpaces()
             symb = self.statement()
             if symb==None:
-                self.reportError('a statement expected in after label') 
+                self.reportError('a statement expected in after label')
                 return None
             ret.append(symb)
 
             return ret
-        
+
         return None
 
     def compound_statement(self):
         revert = self.currentPos
         ret=[self.currentPos,'compound_statement']
-        
+
         self.skipSpaces()
         symb = self.checkSymbol('\{')
         if symb==None:
-            return None        
-        
+            return None
+
         while True:
             self.skipSpaces()
             symb = self.declaration()
@@ -1015,19 +1010,19 @@ class language:
                 ret.append(symb)
                 continue
             break
-            
+
         self.skipSpaces()
         symb = self.checkSymbol('\}')
         if symb==None:
-            self.reportError('expected }') 
+            self.reportError('expected }')
             self.currentPos= revert
             return None
-        
+
         return ret
 
     def declaration_list(self):
         ret=[self.currentPos,'declaration_list'] # TODO: remove later
-        
+
         while True:
             self.skipSpaces()
             symb = self.declaration()
@@ -1040,7 +1035,7 @@ class language:
 
     def statement_list(self):
         ret=[self.currentPos,'statement_list'] # TODO: remove later
-        
+
         while True:
             self.skipSpaces()
             symb = self.statement()
@@ -1054,7 +1049,7 @@ class language:
     def expression_statement(self):
         revert = self.currentPos
         ret=[self.currentPos,'expression_statement'] # TODO: remove later
-        
+
         self.skipSpaces()
         symb = self.expression()
         if symb!=None:
@@ -1064,44 +1059,44 @@ class language:
         if symb==None:
             self.currentPos= revert
             return None
-        
+
         return ret
 
     def selection_statement(self):
         revert = self.currentPos
         ret=[self.currentPos,'selection_statement']#??
-        
+
         self.skipSpaces()
         symb = self.checkSymbol('if')
         if symb!=None:
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.checkSymbol('\(')
             if symb==None:
-                self.reportError('expected ( after if') 
+                self.reportError('expected ( after if')
                 self.currentPos= revert
                 return None
 
             self.skipSpaces()
             symb = self.expression()
             if symb==None:
-                self.reportError('expression needed in if() statement') 
+                self.reportError('expression needed in if() statement')
                 self.currentPos= revert
                 return None
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.checkSymbol('\)')
             if symb==None:
-                self.reportError('expected ) after expression in if statement') 
+                self.reportError('expected ) after expression in if statement')
                 self.currentPos= revert
                 return None
 
             self.skipSpaces()
             symb = self.statement()
             if symb==None:
-                self.reportError('a statement expected in if().. statement') 
+                self.reportError('a statement expected in if().. statement')
                 return None
             ret.append(symb)
 
@@ -1113,7 +1108,7 @@ class language:
             self.skipSpaces()
             symb = self.statement()
             if symb==None:
-                self.reportError('a statement expected after else in if statement') 
+                self.reportError('a statement expected after else in if statement')
                 return None
             ret.append(symb)
             return ret
@@ -1121,11 +1116,11 @@ class language:
         symb = self.checkSymbol('switch')
         if symb!=None:
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.checkSymbol('\(')
             if symb==None:
-                self.reportError('expected ( after switch') 
+                self.reportError('expected ( after switch')
                 self.currentPos= revert
                 return None
 
@@ -1136,18 +1131,18 @@ class language:
                 self.currentPos= revert
                 return None
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.checkSymbol('\)')
             if symb==None:
-                self.reportError('expected ) after expression in switch statement') 
+                self.reportError('expected ) after expression in switch statement')
                 self.currentPos= revert
                 return None
 
             self.skipSpaces()
             symb = self.statement()
             if symb==None:
-                self.reportError('a statement expected in switch().. statement') 
+                self.reportError('a statement expected in switch().. statement')
                 return None
             ret.append(symb)
             return ret
@@ -1155,38 +1150,38 @@ class language:
     def iteration_statement(self):
         revert = self.currentPos
         ret=[self.currentPos,'iteration_statement']#??
-        
+
         self.skipSpaces()
         symb = self.checkSymbol('while')
         if symb!=None:
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.checkSymbol('\(')
             if symb==None:
-                self.reportError('expected ( after while') 
+                self.reportError('expected ( after while')
                 self.currentPos= revert
                 return None
 
             self.skipSpaces()
             symb = self.expression()
             if symb==None:
-                self.reportError('expression needed in while() statement') 
+                self.reportError('expression needed in while() statement')
                 self.currentPos= revert
                 return None
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.checkSymbol('\)')
             if symb==None:
-                self.reportError('expected ) after expression in while statement') 
+                self.reportError('expected ) after expression in while statement')
                 self.currentPos= revert
                 return None
 
             self.skipSpaces()
             symb = self.statement()
             if symb==None:
-                self.reportError('a statement expected in while().. statement') 
+                self.reportError('a statement expected in while().. statement')
                 self.currentPos= revert
                 return None
             ret.append(symb)
@@ -1195,11 +1190,11 @@ class language:
         symb = self.checkSymbol('do')
         if symb!=None:
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.statement()
             if symb==None:
-                self.reportError('a statement expected in do statement') 
+                self.reportError('a statement expected in do statement')
                 self.currentPos= revert
                 return None
             ret.append(symb)
@@ -1207,36 +1202,36 @@ class language:
             self.skipSpaces()
             symb = self.checkSymbol('while')
             if symb==None:
-                self.reportError('expected while in do statement') 
+                self.reportError('expected while in do statement')
                 self.currentPos= revert
                 return None
 
             self.skipSpaces()
             symb = self.checkSymbol('\(')
             if symb==None:
-                self.reportError('expected ( after while in do statement') 
+                self.reportError('expected ( after while in do statement')
                 self.currentPos= revert
                 return None
 
             self.skipSpaces()
             symb = self.expression()
             if symb==None:
-                self.reportError('expression needed in do .. while() statement') 
+                self.reportError('expression needed in do .. while() statement')
                 self.currentPos= revert
                 return None
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.checkSymbol('\)')
             if symb==None:
-                self.reportError('expected ) after expression in switch statement') 
+                self.reportError('expected ) after expression in switch statement')
                 self.currentPos= revert
                 return None
 
             self.skipSpaces()
             symb = self.checkSymbol(';')
             if symb==None:
-                self.reportError('expected ; at the end of do .. while statement') 
+                self.reportError('expected ; at the end of do .. while statement')
                 self.currentPos= revert
                 return None
 
@@ -1245,11 +1240,11 @@ class language:
         symb = self.checkSymbol('for')
         if symb!=None:
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.checkSymbol('\(')
             if symb==None:
-                self.reportError('expected ( after for') 
+                self.reportError('expected ( after for')
                 self.currentPos= revert
                 return None
 
@@ -1258,15 +1253,15 @@ class language:
             if symb==None:
                 symb = self.declaration()#added later as part one of 'for' could be an expression and if not then a declaration stmt
                 if symb==None:
-                    self.reportError('expression or declaration statement needed in for statement') 
+                    self.reportError('expression or declaration statement needed in for statement')
                     self.currentPos= revert
                     return None
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.expression_statement()
             if symb==None:
-                self.reportError('expression statement needed in for statement') 
+                self.reportError('expression statement needed in for statement')
                 self.currentPos= revert
                 return None
             ret.append(symb)
@@ -1279,14 +1274,14 @@ class language:
             self.skipSpaces()
             symb = self.checkSymbol('\)')
             if symb==None:
-                self.reportError('expected ) in for statement') 
+                self.reportError('expected ) in for statement')
                 self.currentPos= revert
                 return None
 
             self.skipSpaces()
             symb = self.statement()
             if symb==None:
-                self.reportError('a statement expected in for statement') 
+                self.reportError('a statement expected in for statement')
                 self.currentPos= revert
                 return None
             ret.append(symb)
@@ -1296,16 +1291,16 @@ class language:
     def jump_statement(self):
         revert = self.currentPos
         ret=[self.currentPos,'jump_statement']#??
-        
+
         self.skipSpaces()
         symb = self.checkSymbol('goto')
         if symb!=None:
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.checkID()
             if symb==None:
-                self.reportError('expected identifier after goto') 
+                self.reportError('expected identifier after goto')
                 self.currentPos= revert
                 return None
             ret.append(symb)
@@ -1313,7 +1308,7 @@ class language:
             self.skipSpaces()
             symb = self.checkSymbol(';')
             if symb==None:
-                self.reportError('expected ; after goto statement') 
+                self.reportError('expected ; after goto statement')
                 self.currentPos= revert
                 return None
             return ret
@@ -1322,11 +1317,11 @@ class language:
         symb = self.checkSymbol('continue')
         if symb!=None:
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.checkSymbol(';')
             if symb==None:
-                self.reportError('expected ; after continue statement') 
+                self.reportError('expected ; after continue statement')
                 self.currentPos= revert
                 return None
             return ret
@@ -1335,11 +1330,11 @@ class language:
         symb = self.checkSymbol('break')
         if symb!=None:
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.checkSymbol(';')
             if symb==None:
-                self.reportError('expected ; after break statement') 
+                self.reportError('expected ; after break statement')
                 self.currentPos= revert
                 return None
             return ret
@@ -1348,7 +1343,7 @@ class language:
         symb = self.checkSymbol('return')
         if symb!=None:
             ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.expression()
             if symb!=None:
@@ -1357,7 +1352,7 @@ class language:
             self.skipSpaces()
             symb = self.checkSymbol(';')
             if symb==None:
-                self.reportError('expected ; after return statement') 
+                self.reportError('expected ; after return statement')
                 self.currentPos= revert
                 return None
             return ret
@@ -1365,7 +1360,7 @@ class language:
 
     def translation_unit(self):
         ret=[self.currentPos,'translation_unit']
-        
+
         while True:
             self.skipSpaces()
             symb = self.external_declaration()
@@ -1394,7 +1389,7 @@ class language:
     def external_declaration(self):
         revert = self.currentPos
         ret=[self.currentPos,'external_declaration']
-        
+
         self.skipSpaces()
         symb = self.function_definition()
         if symb!=None:
@@ -1407,13 +1402,13 @@ class language:
             ret.append(symb)
             return ret
         if len(self.srcCode)> self.currentPos:
-            self.reportError('Unparsed code') 
+            self.reportError('Unparsed code')
         return None
 
     def function_definition(self):
         revert = self.currentPos
         ret=[self.currentPos,'function_definition']
-        
+
         self.skipSpaces()
         symb = self.declaration_specifiers()
         if symb!=None:
@@ -1442,20 +1437,20 @@ class language:
     def constant_expression(self):
         revert = self.currentPos
         ret=[self.currentPos,'constant_expression']
-        
+
         self.skipSpaces()
         symb = self.conditional_expression()
         if symb!=None:
             ret.append(symb)
             return ret
-        
+
         self.currentPos = revert
         return None
 
     def expression(self):
         revert = self.currentPos
         ret=[self.currentPos,'expression']
-        
+
         self.skipSpaces()
         symb = self.assignment_expression()
         if symb!=None:
@@ -1468,7 +1463,7 @@ class language:
                 self.skipSpaces()
                 symb = self.assignment_expression()
                 if symb==None:
-                    self.reportError('expected expression after ,') 
+                    self.reportError('expected expression after ,')
                     self.currentPos = revert
                     return None
                 ret.append(symb)
@@ -1478,19 +1473,19 @@ class language:
     def assignment_expression(self):
         revert = self.currentPos
         ret=[] ##
-        
+
         self.skipSpaces()
         symb = self.conditional_expression()
         if symb==None:
             self.currentPos = revert
-            return None            
+            return None
         ret=symb
 
         self.skipSpaces()
         symb = self.checkSymbol('=|\*=|/=|%=|\+=|-=|<<=|>>=|&=|\^=|\|=')
         if symb==None:
             return ret
-        
+
         self.currentPos = revert
         self.skipSpaces()
         symb = self.unary_expression()
@@ -1505,12 +1500,12 @@ class language:
             self.currentPos = revert
             return ret
         ret = [symb,ret]
-        
+
         self.skipSpaces()
         symb = self.assignment_expression()
         if symb==None:
             self.currentPos = revert
-            return None            
+            return None
         ret.append(symb)
 
         return ret
@@ -1518,12 +1513,12 @@ class language:
     def conditional_expression(self):
         revert = self.currentPos
         ret=['conditional_expression .?.:.'] ##
-        
+
         self.skipSpaces()
         symb = self.logical_or_expression()
         if symb==None:
             self.currentPos = revert
-            return None            
+            return None
         ret = symb
 
         self.skipSpaces()
@@ -1535,36 +1530,36 @@ class language:
         self.skipSpaces()
         symb = self.expression()
         if symb==None:
-            self.reportError('expression needed for ?: operator') 
+            self.reportError('expression needed for ?: operator')
             self.currentPos = revert
-            return None            
+            return None
         ret.append(symb)
 
         self.skipSpaces()
         symb = self.checkSymbol(':')
         if symb==None:
-            self.reportError('(:) needed for ?: operator') 
+            self.reportError('(:) needed for ?: operator')
             self.currentPos = revert
             return None
 
         self.skipSpaces()
         symb = self.conditional_expression()
         if symb==None:
-            self.reportError('expression needed after colon in ?: operator') 
+            self.reportError('expression needed after colon in ?: operator')
             self.currentPos = revert
-            return None            
-        ret.append(symb)            
+            return None
+        ret.append(symb)
         return ret
 
     def logical_or_expression(self):
         revert = self.currentPos
         ret=['logical_or_expression'] ##
-        
+
         self.skipSpaces()
         symb = self.logical_and_expression()
         if symb==None:
             self.currentPos = revert
-            return None            
+            return None
         ret = symb
 
         while True:
@@ -1573,24 +1568,24 @@ class language:
             if symb==None:
                 return ret
             ret = [symb,ret]#ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.logical_and_expression()
             if symb==None:
-                self.reportError('an expression expected after ||') 
+                self.reportError('an expression expected after ||')
                 self.currentPos = revert
                 return None
             ret.append(symb)
-            
+
     def logical_and_expression(self):
         revert = self.currentPos
         ret=['logical_and_expression'] ##
-        
+
         self.skipSpaces()
         symb = self.inclusive_or_expression()
         if symb==None:
             self.currentPos = revert
-            return None            
+            return None
         ret = symb
 
         while True:
@@ -1599,11 +1594,11 @@ class language:
             if symb==None:
                 return ret
             ret = [symb,ret]#ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.inclusive_or_expression()
             if symb==None:
-                self.reportError('an expression expected after &&') 
+                self.reportError('an expression expected after &&')
                 self.currentPos = revert
                 return None
             ret.append(symb)
@@ -1611,12 +1606,12 @@ class language:
     def inclusive_or_expression(self):
         revert = self.currentPos
         ret=['inclusive_or_expression'] ##
-        
+
         self.skipSpaces()
         symb = self.exclusive_or_expression()
         if symb==None:
             self.currentPos = revert
-            return None            
+            return None
         ret = symb
 
         while True:
@@ -1629,11 +1624,11 @@ class language:
             if symb==None:
                 return ret
             ret = [symb,ret]#
-            
+
             self.skipSpaces()
             symb = self.exclusive_or_expression()
             if symb==None:
-                self.reportError('an expression expected after |') 
+                self.reportError('an expression expected after |')
                 self.currentPos = revert
                 return None
             ret.append(symb)
@@ -1641,12 +1636,12 @@ class language:
     def exclusive_or_expression(self):
         revert = self.currentPos
         ret=['exclusive_or_expression'] ##
-        
+
         self.skipSpaces()
         symb = self.and_expression()
         if symb==None:
             self.currentPos = revert
-            return None            
+            return None
         ret = symb
 
         while True:
@@ -1658,11 +1653,11 @@ class language:
                 self.currentPos=self.currentPos-1
                 return ret
             ret = [symb,ret]#ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.and_expression()
             if symb==None:
-                self.reportError('an expression expected after ^') 
+                self.reportError('an expression expected after ^')
                 self.currentPos = revert
                 return None
             ret.append(symb)
@@ -1670,12 +1665,12 @@ class language:
     def and_expression(self):
         revert = self.currentPos
         ret=['and_expression'] ##
-        
+
         self.skipSpaces()
         symb = self.equality_expression()
         if symb==None:
             self.currentPos = revert
-            return None            
+            return None
         ret = symb
 
         while True:
@@ -1688,11 +1683,11 @@ class language:
             if symb==None:
                 return ret
             ret = [symb,ret]##ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.equality_expression()
             if symb==None:
-                self.reportError('an expression expected after &') 
+                self.reportError('an expression expected after &')
                 self.currentPos = revert
                 return None
             ret.append(symb)
@@ -1700,12 +1695,12 @@ class language:
     def equality_expression(self):
         revert = self.currentPos
         ret=['equality_expression'] ##
-        
+
         self.skipSpaces()
         symb = self.relational_expression()
         if symb==None:
             self.currentPos = revert
-            return None            
+            return None
         ret = symb
 
         while True:
@@ -1714,11 +1709,11 @@ class language:
             if symb==None:
                 return ret
             ret = [symb,ret]#ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.relational_expression()
             if symb==None:
-                self.reportError('an expression expected after equaliy check operator') 
+                self.reportError('an expression expected after equaliy check operator')
                 self.currentPos = revert
                 return None
             ret.append(symb)
@@ -1726,12 +1721,12 @@ class language:
     def relational_expression(self):
         revert = self.currentPos
         ret=['relational_expression'] ##
-        
+
         self.skipSpaces()
         symb = self.shift_expression()
         if symb==None:
             self.currentPos = revert
-            return None            
+            return None
         ret = symb
 
         while True:
@@ -1742,11 +1737,11 @@ class language:
                 if symb==None:
                     return ret
             ret = [symb,ret]#ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.shift_expression()
             if symb==None:
-                self.reportError('an expression expected after relational operator') 
+                self.reportError('an expression expected after relational operator')
                 self.currentPos = revert
                 return None
             ret.append(symb)
@@ -1754,12 +1749,12 @@ class language:
     def shift_expression(self):
         revert = self.currentPos
         ret=['shift_expression'] ##
-        
+
         self.skipSpaces()
         symb = self.additive_expression()
         if symb==None:
             self.currentPos = revert
-            return None            
+            return None
         ret = symb
 
         while True:
@@ -1771,11 +1766,11 @@ class language:
                 self.currentPos=self.currentPos-2
                 return ret
             ret = [symb,ret]#ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.additive_expression()
             if symb==None:
-                self.reportError('an expression expected after shift operator') 
+                self.reportError('an expression expected after shift operator')
                 self.currentPos = revert
                 return None
             ret.append(symb)
@@ -1783,12 +1778,12 @@ class language:
     def additive_expression(self):
         revert = self.currentPos
         ret=['additive_expression'] ##
-        
+
         self.skipSpaces()
         symb = self.multiplicative_expression()
         if symb==None:
             self.currentPos = revert
-            return None            
+            return None
         ret = symb
 
         while True:
@@ -1800,11 +1795,11 @@ class language:
                 self.currentPos=self.currentPos-1
                 return ret
             ret = [symb,ret]#ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.multiplicative_expression()
             if symb==None:
-                self.reportError('an expression expected after +/- operator') 
+                self.reportError('an expression expected after +/- operator')
                 self.currentPos = revert
                 return None
             ret.append(symb)
@@ -1812,12 +1807,12 @@ class language:
     def multiplicative_expression(self):
         revert = self.currentPos
         ret=['multiplicative_expression'] ##
-        
+
         self.skipSpaces()
         symb = self.cast_expression()
         if symb==None:
             self.currentPos = revert
-            return None            
+            return None
         ret = symb
 
         while True:
@@ -1829,7 +1824,7 @@ class language:
                 self.currentPos=self.currentPos-1
                 return ret
             ret = [symb,ret]#ret.append(symb)
-            
+
             self.skipSpaces()
             symb = self.cast_expression()
             if symb==None:
@@ -1840,8 +1835,8 @@ class language:
 
     def cast_expression(self):
         revert = self.currentPos
-        ret=['cast'] 
-    
+        ret=['cast']
+
         if self.DSL!=None:
             symb = self.DSL.expression()
             if symb!=None:
@@ -1892,11 +1887,11 @@ class language:
             return None
         ret = symb
         return ret
-        
+
     def unary_expression(self):
         revert = self.currentPos
-        ret=['unary_expression'] 
-        
+        ret=['unary_expression']
+
         self.skipSpaces()
         symb = self.postfix_expression()
         if symb!=None:
@@ -1956,14 +1951,14 @@ class language:
             if symb!=None:
                 ret.append(symb)
                 return ret
-        
+
         self.currentPos = revert
         return None
-    
+
     def argument_expression_list(self):
         revert = self.currentPos
         ret=[self.currentPos,'argument_expression_list']
-        
+
         self.skipSpaces()
         symb = self.assignment_expression()
         if symb!=None:
@@ -1976,24 +1971,24 @@ class language:
                 self.skipSpaces()
                 symb = self.assignment_expression()
                 if symb==None:
-                    self.reportError('expected expression after ,') 
+                    self.reportError('expected expression after ,')
                     self.currentPos = revert
                     return None
                 ret.append(symb)
         self.currentPos = revert
         return None
-    
+
     def postfix_expression(self):
         revert = self.currentPos
         ret=[]
-        
+
         self.skipSpaces()
         symb = self.primary_expression()
         if symb==None:
             self.currentPos = revert
             return None
         ret.append(symb)
-                  
+
         while True:
             self.skipSpaces()
             symb = self.checkSymbol('\[')
@@ -2001,7 +1996,7 @@ class language:
                 self.skipSpaces()
                 symb = self.expression()
                 if symb==None:
-                    self.reportError('expression expected after [') 
+                    self.reportError('expression expected after [')
                     self.currentPos = revert
                     return None
                 ret.append('[expression]')
@@ -2010,7 +2005,7 @@ class language:
                 symb = self.checkSymbol('\]')
                 if symb!=None:
                     continue
-                self.reportError('expected ]') 
+                self.reportError('expected ]')
                 self.currentPos = revert
                 return None
 
@@ -2027,7 +2022,7 @@ class language:
                 symb = self.checkSymbol('\)')
                 if symb!=None:
                     continue
-                #self.reportError('expected )') 
+                #self.reportError('expected )')
                 self.currentPos = revert
                 return None
 
@@ -2039,7 +2034,7 @@ class language:
                 if symb!=None:
                     ret.append(symb)
                     continue
-                self.reportError('expected member name') 
+                self.reportError('expected member name')
                 self.currentPos = revert
                 return None
 
@@ -2050,22 +2045,22 @@ class language:
 
             break
         return ret
-    
+
     def primary_expression(self):
         revert = self.currentPos
         ret=['primary_expression']##
-        
+
         self.skipSpaces()
         symb = self.checkID()
         if symb!=None:
             ret = symb
             return ret
-            
+
         symb = self.checkSymbol('''([0-9]+[Ee][+-]?[0-9]+(f|F|l|L)?)|([0-9]*\.[0-9]+([Ee][+-]?[0-9]+)?(f|F|l|L)?)|([0-9]+\.[0-9]*([Ee][+-]?[0-9]+)?(f|F|l|L)?)''')
         if symb!=None:
             ret = symb
             return ret
-            
+
         symb = self.checkSymbol('''(0[xX][a-fA-F0-9]+(u|U|l|L)*)|(0[0-9]+(u|U|l|L)*)|([0-9]+(u|U|l|L)*)|(L?'(\\.|[^\\'])+')''')
         if symb!=None:
             ret = symb
@@ -2075,7 +2070,7 @@ class language:
         if symb!=None:
             ret = symb
             return ret
-        
+
         symb = self.checkSymbol('\(')
         if symb!=None:
             self.skipSpaces()
@@ -2087,14 +2082,14 @@ class language:
             self.skipSpaces()
             symb = self.checkSymbol('\)')
             if symb==None:
-                self.reportError('expression started with paranthesis( should end with paranthesis)') 
+                self.reportError('expression started with paranthesis( should end with paranthesis)')
             return ret
         self.currentPos = revert
-        
+
         return None
 
 class generator:
-    
+
     def __init__(self):
         pass
     def declaration(self,node):
@@ -2102,14 +2097,14 @@ class generator:
             return None
         i = 2
         ret = ''
-        
+
         symb = self.declaration_specifiers(node[i])
         if symb==None:
             print 'generator error: declaration with no declaration_specifiers'
             return None
         i = i + 1
         ret = ret + symb
-        
+
         if len(node)>i:
             symb = self.init_declarator_list(node[i])
             if symb!=None:
@@ -2157,26 +2152,26 @@ class generator:
         if node[1]!='init_declarator':
             return None
         i = 2
-        
+
         symb = self.declarator(node[i])
         if symb==None:#no need
             print 'generator error: init_declarator with no declarator'
             return None
         i = i + 1
         ret = symb
-        
+
         if len(node)>i:
             symb = self.initializer(node[i])
             if symb!=None:
                 ret = ret + ' = ' + symb
 
         return ret
-        
+
     def struct_or_union_specifier(self,node):
         if node[1]!='struct' and node[1]!= 'union':
             return None
         ret = node[1]+' '+node[2]
-        
+
         if len(node)>3:
             symb = self.struct_declaration_list(node[3])
             if symb!=None:
@@ -2187,7 +2182,7 @@ class generator:
     def struct_declaration_list(self,node):
         if node[1]!='struct_declaration_list':
             return None
-        
+
         ret = ''
         for i in node[2:]:
             symb = self.struct_declaration(i)
@@ -2197,13 +2192,13 @@ class generator:
     def struct_declaration(self,node):
         if node[1]!='struct_declaration':
             return None
-        
+
         symb = self.specifier_qualifier_list(node[2])
         if symb==None:
             print 'generator error: struct_declaration without specifier_qualifier_list'
             return None
         ret = symb
-        
+
         symb = self.struct_declarator_list(node[3])
         if symb==None:
             print 'generator error: struct_declaration without struct_declarator_list'
@@ -2214,7 +2209,7 @@ class generator:
     def specifier_qualifier_list(self, node):
         if node[1]!='specifier_qualifier_list':
             return None
-        ret = ''       
+        ret = ''
         for i in node[2:]:
             if isinstance(i,list)==False:
                 ret = ret + ' ' + i
@@ -2247,7 +2242,7 @@ class generator:
     def struct_declarator(self,node):
         if node[1]!='struct_declarator':
             return None
-        
+
         ret = ''
         i = 2
 
@@ -2255,7 +2250,7 @@ class generator:
         if symb!=None:
             ret = ret + symb
             i = i + 1
-        
+
         if len(node)>i:
             symb = self.constant_expression(node[i])
             if symb!=None:
@@ -2265,13 +2260,13 @@ class generator:
     def enum_specifier(self, node):
         if node[1]!='enum':
             return None
-        
+
         ret = 'enum ' + node[2]
-        
+
         if len(node)>3:
             symb = self.enumerator_list(node[3])
             ret = ret + '{' + symb + '}'
-        
+
         return ret
 
     def enumerator_list(self, node):
@@ -2283,30 +2278,30 @@ class generator:
             symb = self.enumerator(i)
             ret = ret + ' , ' + symb
         return ret[3:]
-       
+
     def enumerator(self):
         if node[1]!='enumerator':
             return None
-        
+
         ret = node[2]
-        
+
         if len(node)>3:
             symb = self.constant_expression(node[3])
             ret = ret + ' = ' + symb
-        
+
         return ret
 
     def declarator(self,node):
         if node[1]!='declarator':
             return None
-        
+
         ret = ''
         i = 2
         if len(node)>3:
             symb = self.pointer(node[i])
             ret = ret + symb
             i = i + 1
-        
+
         symb = self.direct_declarator(node[i])
         ret = ret + symb
         return ret
@@ -2314,7 +2309,7 @@ class generator:
     def direct_declarator(self,node):
         if node[1]!='direct_declarator':
             return None
-        
+
         ret = ''
         if isinstance(node[2],list)==False:
             ret = ret + node[2]
@@ -2324,7 +2319,7 @@ class generator:
                 print 'generator error: direct_declarator with neither an identifer nor a (declarator)'
                 return None
             ret = ret +'('+ symb+')'
-            
+
         i = 3
         while True:
             if len(node)<=i:
@@ -2352,13 +2347,13 @@ class generator:
                 ret = ret + '(' + symb + ')'
                 i = i + 2
                 continue
-                
+
         return ret
-    
+
     def pointer(self, node):
         if node[1]!='pointer':
             return None
-        
+
         ret = ''
         for i in node[2:]:
             if isinstance(i,list):
@@ -2366,14 +2361,14 @@ class generator:
                     ret = ret + ' ' + j
             else:
                 ret = ret + ' ' + i
-        
+
         ret = ret + ' '
         return ret
-        
+
     def parameter_type_list(self, node):
         if node[1]!='parameter_type_list':
             return None
-        
+
         ret = self.parameter_list(node[2])
         if len(node)>3:
             ret = ret + ' , ...'
@@ -2382,26 +2377,26 @@ class generator:
     def parameter_list(self, node):
         if node[1]!='parameter_list':
             return None
-        
+
         ret = ''
         for i in node[2:]:
             symb = self.parameter_declaration(i)
             if symb==None:
                 print 'generator error: parameter list with a non parameter_declaration element'# no need in fact
             ret = ret + ' , ' + symb
-        
+
         return ret[3:]
 
     def parameter_declaration(self, node):
         if node[1]!='parameter_declaration':
             return None
-        
+
         symb = self.declaration_specifiers(node[2])
         if symb==None:
             print 'generator error: declaration with no declaration_specifiers'
             return None
         ret = symb
-        
+
         if len(node)>3:
             symb = self.declarator(node[3])
             if symb==None:
@@ -2424,13 +2419,13 @@ class generator:
     def type_name(self, node):
         if node[1]!='type_name':
             return None
-        
+
         symb = self.specifier_qualifier_list(node[2])
         if symb==None:
             print 'generator error: type_name without specifier_qualifier_list'
             return None
         ret = symb
-        
+
         if len(node)>3:
             symb = self.abstract_declarator(node[3])
             ret = ret + ' ' + symb
@@ -2439,7 +2434,7 @@ class generator:
     def abstract_declarator(self,node):
         if node[1]!='abstract_declarator':
             return None
-        
+
         ret = ''
         i = 2
 
@@ -2447,7 +2442,7 @@ class generator:
         if symb!=None:
             ret = ret + symb
             i = i + 1
-        
+
         if len(node)>i:
             symb = self.direct_abstract_declarator(node[i])
             if symb!=None:
@@ -2457,7 +2452,7 @@ class generator:
     def direct_abstract_declarator(self, node):
         if node[1]!='direct_abstract_declarator':
             return None
-        
+
         ret = ''
         i = 2
         while True:
@@ -2486,38 +2481,38 @@ class generator:
                 ret = ret + '(' + symb + ')'
                 i = i + 2
                 continue
-                
+
         return ret
 
     def initializer(self, node):
         if node[1]!='initializer':
             return None
-        
+
         ret = self.assignment_expression(node[2])
         if ret!=None:
             return ret
-        
+
         ret = self.initializer_list(node[2])
         if ret==None:
             print 'generator error: initializer should contain an assignment_expression or an initializer_list'
             return None
-        
+
         if len(node)>2:
             ret = '{' + ret + '}'
-        
+
         return ret
 
     def initializer_list(self, node):
         if node[1]!='initializer_list':
             return None
-        
+
         ret = ''
         for i in node[2:]:
             symb = self.initializer(i)
             if symb==None:
                 print 'generator error: initializer_list with a non initializer element'# no need in fact
             ret = ret + ' , ' + symb
-        
+
         return ret[3:]
 
     def statement(self, node):
@@ -2527,7 +2522,7 @@ class generator:
         symb = self.labeled_statement(node[2])
         if symb!=None:
             return symb
-        
+
         symb = self.compound_statement(node[2])
         if symb!=None:
             return symb
@@ -2535,7 +2530,7 @@ class generator:
         symb = self.expression_statement(node[2])
         if symb!=None:
             return symb
-        
+
         symb = self.selection_statement(node[2])
         if symb!=None:
             return symb
@@ -2547,13 +2542,13 @@ class generator:
         symb = self.jump_statement(node[2])
         if symb!=None:
             return symb
-        
+
         return 'None C statement'
 
     def labeled_statement(self, node):
         if node[1]!='labeled_statement':
             return None
-        
+
         if node[2]=='case':
             symb = self.constant_expression(node[3])
             ret = 'case ' + symb + ' : '
@@ -2574,7 +2569,7 @@ class generator:
     def compound_statement(self,node):
         if node[1]!='compound_statement':
             return None
-        
+
         ret = '{'
         for i in node[2:]:
             symb = self.declaration(i)
@@ -2587,72 +2582,72 @@ class generator:
                 ret = ret + '\n' + symb
                 continue
             break
-            
+
         ret = ret + '\n}'
         return ret
 
     def declaration_list(self,node):
         if node[1]!='declaration_list':
             return None
-        
+
         ret = ''
         for i in node[2:]:
             symb = self.declaration(i)
             if symb==None:
                 print 'generator error: declaration_list with a non declaration element'# no need in fact
             ret = ret + symb
-        
+
         return ret
 
     def statement_list(self, node):
         if node[1]!='statement_list':
             return None
-        
+
         ret = ''
         for i in node[2:]:
             symb = self.statement(i)
             if symb==None:
                 print 'generator error: declaration_list with a non declaration element'# no need in fact
             ret = ret + symb
-        
+
         return ret
 
     def expression_statement(self, node):
         if node[1]!='expression_statement':
             return None
-        
+
         ret = ''
         if len(node)>2:
             symb = self.expression(node[2])
             if symb!=None:
                 ret = symb
-                
-        ret = ret + ' ;'       
+
+        ret = ret + ' ;'
         return ret
 
     def selection_statement(self, node):
         if node[1]!='selection_statement':
             return None
-        
+
         ret = ''
-        if node[2]=='if': 
+        if node[2]=='if':
             symb = self.expression(node[3])
             ret = 'if ( ' + symb + ' ) '
-            
+
             symb = self.statement(node[4])
             ret = ret + symb
-            
+
             if len(node)<6:
                 return ret
-            
+
             symb = self.statement(node[5])
             ret = ret + ' else ' + symb
             return ret
 
-        elif node[2]=='switch': 
+        elif node[2]=='switch':
             symb = self.expression(node[3])
             ret = 'switch ( ' + symb + ' ) '
-            
+
             symb = self.statement(node[4])
             ret = ret + symb
             return ret
@@ -2660,25 +2655,25 @@ class generator:
     def iteration_statement(self, node):
         if node[1]!='iteration_statement':
             return None
-        
+
         ret = ''
-        if node[2]=='while': 
+        if node[2]=='while':
             symb = self.expression(node[3])
             ret = 'while ( ' + symb + ' ) '
-            
+
             symb = self.statement(node[4])
-            ret = ret + symb            
+            ret = ret + symb
             return ret
 
-        elif node[2]=='do': 
+        elif node[2]=='do':
             symb = self.statement(node[3])
             ret = 'do ' + symb + ' while ( '
-            
+
             symb = self.expression(node[4])
             ret = ret + symb + ' );'
             return ret
 
-        elif node[2]=='for': 
+        elif node[2]=='for':
             symb = self.expression_statement(node[3])
             if symb==None:
                 symb = self.declaration(node[3])
@@ -2697,18 +2692,18 @@ class generator:
     def jump_statement(self, node):
         if node[1]!='jump_statement':
             return None
-        
+
         ret = ''
-        if node[2]=='goto': 
+        if node[2]=='goto':
             return 'goto ' + node[3] + ';'
 
-        elif node[2]=='continue': 
+        elif node[2]=='continue':
             return 'continue;'
 
-        elif node[2]=='break': 
+        elif node[2]=='break':
             return 'break;'
 
-        elif node[2]=='return': 
+        elif node[2]=='return':
             ret = 'return '
             if len(node)>3:
                 symb = self.expression(node[3])
@@ -2732,7 +2727,7 @@ class generator:
             return None
 
         ret=''
-        
+
         symb = self.function_definition(node[2])
         if symb!=None:
             ret = symb
@@ -2748,10 +2743,10 @@ class generator:
     def function_definition(self,node):
         if node[1]!='function_definition':
             return None
-        
+
         i = 2
         ret = ''
-        
+
         symb = self.declaration_specifiers(node[i])
         if symb!=None:
             i = i + 1
@@ -2808,7 +2803,7 @@ class generator:
 
     def conditional_expression(self,node):
         if isinstance(node[0],list)!=True:
-            if node[0]=='?':        
+            if node[0]=='?':
                 symb = self.logical_or_expression(node[1])
                 ret = symb + ' ? '
                 symb = self.expression(node[2])
@@ -2820,24 +2815,24 @@ class generator:
 
     def logical_or_expression(self,node):
         if isinstance(node[0],list)!=True:
-            if node[0]=='||':        
+            if node[0]=='||':
                 symb = self.logical_or_expression(node[1])
                 ret = symb + ' || '
                 symb = self.logical_and_expression(node[2])
                 ret = ret + symb
                 return ret
         return self.logical_and_expression(node)
-    
+
     def logical_and_expression(self,node):
         if isinstance(node[0],list)!=True:
-            if node[0]=='&&':        
+            if node[0]=='&&':
                 symb = self.logical_and_expression(node[1])
                 ret = symb + ' && '
                 symb = self.inclusive_or_expression(node[2])
                 ret = ret + symb
                 return ret
         return self.inclusive_or_expression(node)
-    
+
     def inclusive_or_expression(self,node):
         if isinstance(node[0],list)!=True:
             if node[0]=='|':
@@ -2847,7 +2842,7 @@ class generator:
                 ret = ret + symb
                 return ret
         return self.exclusive_or_expression(node)
-    
+
     def exclusive_or_expression(self,node):
         if isinstance(node[0],list)!=True:
             if node[0]=='^':
@@ -2944,10 +2939,10 @@ class generator:
                         symb = self.unary_expression(node[2])
                         return node[1]+symb
                     return node[1]+'('+symb+')'
-       
+
         return self.postfix_expression(node)
 
-    
+
     def argument_expression_list(self,node):
         if node[1]!='argument_expression_list':
             return None
@@ -2959,10 +2954,10 @@ class generator:
                 ret = ret + ' , ' + symb
 
         return ret[2:]
-    
+
     def postfix_expression(self,node):
         ret = self.primary_expression(node[0])
-            
+
         i = 1
         while True:
             if len(node)<=i:
@@ -2991,18 +2986,18 @@ class generator:
                 continue
             else:#modification
                 return None
-                
+
         return ret
-    
+
     def primary_expression(self,node):
         if isinstance(node,list)!=True:
             return node
         return '('+self.expression(node)+')'
-        
+
 
 
 class finalprocessor:
-    
+
     def __init__(self):
         pass
     def finalOutput(self,dsl):
@@ -3033,14 +3028,14 @@ class finalprocessor:
             return None
         i = 2
         ret = ''
-        
+
         symb = self.declaration_specifiers(node[i])
         if symb==None:
             print 'generator error: declaration with no declaration_specifiers'
             return None
         i = i + 1
         ret = ret + symb
-        
+
         if len(node)>i:
             symb = self.init_declarator_list(node[i])
             if symb!=None:
@@ -3088,26 +3083,26 @@ class finalprocessor:
         if node[1]!='init_declarator':
             return None
         i = 2
-        
+
         symb = self.declarator(node[i])
         if symb==None:#no need
             print 'generator error: init_declarator with no declarator'
             return None
         i = i + 1
         ret = symb
-        
+
         if len(node)>i:
             symb = self.initializer(node[i])
             if symb!=None:
                 ret = ret + ' = ' + symb
 
         return ret
-        
+
     def struct_or_union_specifier(self,node):
         if node[1]!='struct' and node[1]!= 'union':
             return None
         ret = node[1]+' '+node[2]
-        
+
         if len(node)>3:
             symb = self.struct_declaration_list(node[3])
             if symb!=None:
@@ -3118,7 +3113,7 @@ class finalprocessor:
     def struct_declaration_list(self,node):
         if node[1]!='struct_declaration_list':
             return None
-        
+
         ret = ''
         for i in node[2:]:
             symb = self.struct_declaration(i)
@@ -3128,13 +3123,13 @@ class finalprocessor:
     def struct_declaration(self,node):
         if node[1]!='struct_declaration':
             return None
-        
+
         symb = self.specifier_qualifier_list(node[2])
         if symb==None:
             print 'generator error: struct_declaration without specifier_qualifier_list'
             return None
         ret = symb
-        
+
         symb = self.struct_declarator_list(node[3])
         if symb==None:
             print 'generator error: struct_declaration without struct_declarator_list'
@@ -3145,7 +3140,7 @@ class finalprocessor:
     def specifier_qualifier_list(self, node):
         if node[1]!='specifier_qualifier_list':
             return None
-        ret = ''       
+        ret = ''
         for i in node[2:]:
             if isinstance(i,list)==False:
                 ret = ret + ' ' + i
@@ -3178,7 +3173,7 @@ class finalprocessor:
     def struct_declarator(self,node):
         if node[1]!='struct_declarator':
             return None
-        
+
         ret = ''
         i = 2
 
@@ -3186,7 +3181,7 @@ class finalprocessor:
         if symb!=None:
             ret = ret + symb
             i = i + 1
-        
+
         if len(node)>i:
             symb = self.constant_expression(node[i])
             if symb!=None:
@@ -3196,13 +3191,13 @@ class finalprocessor:
     def enum_specifier(self, node):
         if node[1]!='enum':
             return None
-        
+
         ret = 'enum ' + node[2]
-        
+
         if len(node)>3:
             symb = self.enumerator_list(node[3])
             ret = ret + '{' + symb + '}'
-            
+
         return ret
 
     def enumerator_list(self, node):
@@ -3214,30 +3209,30 @@ class finalprocessor:
             symb = self.enumerator(i)
             ret = ret + ' , ' + symb
         return ret[3:]
-       
+
     def enumerator(self, node):
         if node[1]!='enumerator':
             return None
-        
+
         ret = node[2]
-        
+
         if len(node)>3:
             symb = self.constant_expression(node[3])
             ret = ret + ' = ' + symb
-        
+
         return ' $#'+str(node[0])+'#$ '+ret
 
     def declarator(self,node):
         if node[1]!='declarator':
             return None
-        
+
         ret = ''
         i = 2
         if len(node)>3:
             symb = self.pointer(node[i])
             ret = ret + symb
             i = i + 1
-        
+
         symb = self.direct_declarator(node[i])
         ret = ret + symb
         return ret
@@ -3245,7 +3240,7 @@ class finalprocessor:
     def direct_declarator(self,node):
         if node[1]!='direct_declarator':
             return None
-        
+
         ret = ''
         if isinstance(node[2],list)==False:
             ret = ret + node[2]
@@ -3255,7 +3250,7 @@ class finalprocessor:
                 print 'generator error: direct_declarator with neither an identifer nor a (declarator)'
                 return None
             ret = ret +'('+ symb+')'
-            
+
         i = 3
         while True:
             if len(node)<=i:
@@ -3283,13 +3278,13 @@ class finalprocessor:
                 ret = ret + '(' + symb + ')'
                 i = i + 2
                 continue
-                
+
         return ' $#'+str(node[0])+'#$ '+ret
-    
+
     def pointer(self, node):
         if node[1]!='pointer':
             return None
-        
+
         ret = ''
         for i in node[2:]:
             if isinstance(i,list):
@@ -3297,14 +3292,14 @@ class finalprocessor:
                     ret = ret + ' ' + j
             else:
                 ret = ret + ' ' + i
-        
+
         ret = ret + ' '
         return ' $#'+str(node[0])+'#$ '+ret
-        
+
     def parameter_type_list(self, node):
         if node[1]!='parameter_type_list':
             return None
-        
+
         ret = self.parameter_list(node[2])
         if len(node)>3:
             ret = ret + ' , ...'
@@ -3313,26 +3308,26 @@ class finalprocessor:
     def parameter_list(self, node):
         if node[1]!='parameter_list':
             return None
-        
+
         ret = ''
         for i in node[2:]:
             symb = self.parameter_declaration(i)
             if symb==None:
                 print 'generator error: parameter list with a non parameter_declaration element'# no need in fact
             ret = ret + ' , ' + symb
-        
+
         return ret[3:]
 
     def parameter_declaration(self, node):
         if node[1]!='parameter_declaration':
             return None
-        
+
         symb = self.declaration_specifiers(node[2])
         if symb==None:
             print 'generator error: declaration with no declaration_specifiers'
             return None
         ret = symb
-        
+
         if len(node)>3:
             symb = self.declarator(node[3])
             if symb==None:
@@ -3355,13 +3350,13 @@ class finalprocessor:
     def type_name(self, node):
         if node[1]!='type_name':
             return None
-        
+
         symb = self.specifier_qualifier_list(node[2])
         if symb==None:
             print 'generator error: type_name without specifier_qualifier_list'
             return None
         ret = symb
-        
+
         if len(node)>3:
             symb = self.abstract_declarator(node[3])
             ret = ret + ' ' + symb
@@ -3370,7 +3365,7 @@ class finalprocessor:
     def abstract_declarator(self,node):
         if node[1]!='abstract_declarator':
             return None
-        
+
         ret = ''
         i = 2
 
@@ -3378,7 +3373,7 @@ class finalprocessor:
         if symb!=None:
             ret = ret + symb
             i = i + 1
-        
+
         if len(node)>i:
             symb = self.direct_abstract_declarator(node[i])
             if symb!=None:
@@ -3388,7 +3383,7 @@ class finalprocessor:
     def direct_abstract_declarator(self, node):
         if node[1]!='direct_abstract_declarator':
             return None
-        
+
         ret = ''
         i = 2
         while True:
@@ -3417,38 +3412,38 @@ class finalprocessor:
                 ret = ret + '(' + symb + ')'
                 i = i + 2
                 continue
-                
+
         return ret
 
     def initializer(self, node):
         if node[1]!='initializer':
             return None
-        
+
         ret = self.assignment_expression(node[2])
         if ret!=None:
             return ret
-        
+
         ret = self.initializer_list(node[2])
         if ret==None:
             print 'generator error: initializer should contain an assignment_expression or an initializer_list'
             return None
-        
+
         if len(node)>2:
             ret = '{' + ret + '}'
-        
+
         return ' $#'+str(node[0])+'#$ '+ret
 
     def initializer_list(self, node):
         if node[1]!='initializer_list':
             return None
-        
+
         ret = ''
         for i in node[2:]:
             symb = self.initializer(i)
             if symb==None:
                 print 'generator error: initializer_list with a non initializer element'# no need in fact
             ret = ret + ' , ' + symb
-        
+
         return ret[3:]
 
     def statement(self, node):
@@ -3458,7 +3453,7 @@ class finalprocessor:
         symb = self.labeled_statement(node[2])
         if symb!=None:
             return ' $#'+str(node[0])+'#$ '+symb
-        
+
         symb = self.compound_statement(node[2])
         if symb!=None:
             return ' $#'+str(node[0])+'#$ '+symb
@@ -3466,7 +3461,7 @@ class finalprocessor:
         symb = self.expression_statement(node[2])
         if symb!=None:
             return ' $#'+str(node[0])+'#$ '+symb
-        
+
         symb = self.selection_statement(node[2])
         if symb!=None:
             return ' $#'+str(node[0])+'#$ '+symb
@@ -3478,13 +3473,13 @@ class finalprocessor:
         symb = self.jump_statement(node[2])
         if symb!=None:
             return ' $#'+str(node[0])+'#$ '+symb
-        
+
         return 'None C statement'
 
     def labeled_statement(self, node):
         if node[1]!='labeled_statement':
             return None
-        
+
         if node[2]=='case':
             symb = self.constant_expression(node[3])
             ret = 'case ' + symb + ' : '
@@ -3505,7 +3500,7 @@ class finalprocessor:
     def compound_statement(self,node):
         if node[1]!='compound_statement':
             return None
-        
+
         ret = '{'
         for i in node[2:]:
             symb = self.declaration(i)
@@ -3518,72 +3513,72 @@ class finalprocessor:
                 ret = ret + '\n' + symb
                 continue
             break
-            
+
         ret = ret + '\n}'
         return ret
 
     def declaration_list(self,node):
         if node[1]!='declaration_list':
             return None
-        
+
         ret = ''
         for i in node[2:]:
             symb = self.declaration(i)
             if symb==None:
                 print 'generator error: declaration_list with a non declaration element'# no need in fact
             ret = ret + symb
-        
+
         return ret
 
     def statement_list(self, node):
         if node[1]!='statement_list':
             return None
-        
+
         ret = ''
         for i in node[2:]:
             symb = self.statement(i)
             if symb==None:
                 print 'generator error: declaration_list with a non declaration element'# no need in fact
             ret = ret + symb
-        
+
         return ret
 
     def expression_statement(self, node):
         if node[1]!='expression_statement':
             return None
-        
+
         ret = ''
         if len(node)>2:
             symb = self.expression(node[2])
             if symb!=None:
                 ret = symb
-                
-        ret = ret + ' ;'       
+
+        ret = ret + ' ;'
         return ret
 
     def selection_statement(self, node):
         if node[1]!='selection_statement':
             return None
-        
+
         ret = ''
-        if node[2]=='if': 
+        if node[2]=='if':
             symb = self.expression(node[3])
             ret = 'if ( ' + symb + ' ) '
-            
+
             symb = self.statement(node[4])
             ret = ret + symb
-            
+
             if len(node)<6:
                 return ret
-            
+
             symb = self.statement(node[5])
             ret = ret + ' else ' + symb
             return ret
 
-        elif node[2]=='switch': 
+        elif node[2]=='switch':
             symb = self.expression(node[3])
             ret = 'switch ( ' + symb + ' ) '
-            
+
             symb = self.statement(node[4])
             ret = ret + symb
             return ret
@@ -3591,25 +3586,25 @@ class finalprocessor:
     def iteration_statement(self, node):
         if node[1]!='iteration_statement':
             return None
-        
+
         ret = ''
-        if node[2]=='while': 
+        if node[2]=='while':
             symb = self.expression(node[3])
             ret = 'while ( ' + symb + ' ) '
-            
+
             symb = self.statement(node[4])
-            ret = ret + symb            
+            ret = ret + symb
             return ret
 
-        elif node[2]=='do': 
+        elif node[2]=='do':
             symb = self.statement(node[3])
             ret = 'do ' + symb + ' while ( '
-            
+
             symb = self.expression(node[4])
             ret = ret + symb + ' );'
             return ret
 
-        elif node[2]=='for': 
+        elif node[2]=='for':
             symb = self.expression_statement(node[3])
             if symb==None:
                 symb = self.declaration(node[3])
@@ -3628,18 +3623,18 @@ class finalprocessor:
     def jump_statement(self, node):
         if node[1]!='jump_statement':
             return None
-        
+
         ret = ''
-        if node[2]=='goto': 
+        if node[2]=='goto':
             return 'goto ' + node[3] + ';'
 
-        elif node[2]=='continue': 
+        elif node[2]=='continue':
             return 'continue;'
 
-        elif node[2]=='break': 
+        elif node[2]=='break':
             return 'break;'
 
-        elif node[2]=='return': 
+        elif node[2]=='return':
             ret = 'return '
             if len(node)>3:
                 symb = self.expression(node[3])
@@ -3663,7 +3658,7 @@ class finalprocessor:
             return None
 
         ret=''
-        
+
         symb = self.function_definition(node[2])
         if symb!=None:
             ret = symb
@@ -3679,10 +3674,10 @@ class finalprocessor:
     def function_definition(self,node):
         if node[1]!='function_definition':
             return None
-        
+
         i = 2
         ret = ''
-        
+
         symb = self.declaration_specifiers(node[i])
         if symb!=None:
             i = i + 1
@@ -3739,7 +3734,7 @@ class finalprocessor:
 
     def conditional_expression(self,node):
         if isinstance(node[0],list)!=True:
-            if node[0]=='?':        
+            if node[0]=='?':
                 symb = self.logical_or_expression(node[1])
                 ret = symb + ' ? '
                 symb = self.expression(node[2])
@@ -3751,24 +3746,24 @@ class finalprocessor:
 
     def logical_or_expression(self,node):
         if isinstance(node[0],list)!=True:
-            if node[0]=='||':        
+            if node[0]=='||':
                 symb = self.logical_or_expression(node[1])
                 ret = symb + ' || '
                 symb = self.logical_and_expression(node[2])
                 ret = ret + symb
                 return ret
         return self.logical_and_expression(node)
-    
+
     def logical_and_expression(self,node):
         if isinstance(node[0],list)!=True:
-            if node[0]=='&&':        
+            if node[0]=='&&':
                 symb = self.logical_and_expression(node[1])
                 ret = symb + ' && '
                 symb = self.inclusive_or_expression(node[2])
                 ret = ret + symb
                 return ret
         return self.inclusive_or_expression(node)
-    
+
     def inclusive_or_expression(self,node):
         if isinstance(node[0],list)!=True:
             if node[0]=='|':
@@ -3778,7 +3773,7 @@ class finalprocessor:
                 ret = ret + symb
                 return ret
         return self.exclusive_or_expression(node)
-    
+
     def exclusive_or_expression(self,node):
         if isinstance(node[0],list)!=True:
             if node[0]=='^':
@@ -3875,10 +3870,10 @@ class finalprocessor:
                         symb = self.unary_expression(node[2])
                         return node[1]+symb
                     return node[1]+'('+symb+')'
-       
+
         return self.postfix_expression(node)
 
-    
+
     def argument_expression_list(self,node):
         if node[1]!='argument_expression_list':
             return None
@@ -3890,7 +3885,7 @@ class finalprocessor:
                 ret = ret + ' , ' + symb
 
         return ret[2:]
-    
+
     def postfix_expression(self,node):
         ret = self.primary_expression(node[0])
 
@@ -3922,13 +3917,10 @@ class finalprocessor:
                 continue
             else:#modification
                 return None
-                
+
         return ret
-    
+
     def primary_expression(self,node):
         if isinstance(node,list)!=True:
             return node
         return '('+self.expression(node)+')'
-        
-
-

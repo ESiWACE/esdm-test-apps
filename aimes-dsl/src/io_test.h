@@ -25,7 +25,7 @@ void TestIO(GRID *g)
     io_var_t io_test_output4;
     GVAL EDGE 2D test_input4;
     io_var_t io_test_input4;
-	
+
     ALLOC test_output1;
     ALLOC test_input1;
 
@@ -76,10 +76,10 @@ void TestIO(GRID *g)
     io_write_announce(g, &io_test_output4);
     printf("Writing to disk...\n");
     io_write_start(g);
-		
+
     io_write_finalize(g);
 
-	
+
     printf("Init read...\n");
     io_read_init(g, "temp_netcdf_test_output.cdf");
 
@@ -102,10 +102,10 @@ void TestIO(GRID *g)
 	    success = 0;
 	}
     }
-    printf("%d/%d errors for CELL 3D\n",count, g->height*g->cellCount);
+    printf("%zu/%d errors for CELL 3D\n",count, g->height*g->cellCount);
     total += count;
     count = 0;
-    
+
     FOREACH edge IN grid
     {
 	if(test_output2[edge] != test_input2[edge])
@@ -114,10 +114,10 @@ void TestIO(GRID *g)
 	    success = 0;
 	}
     }
-    printf("%d/%d errors for EDGE 3D\n",count, g->height*g->edgeCount);
+    printf("%zu/%d errors for EDGE 3D\n",count, g->height*g->edgeCount);
     total += count;
     count = 0;
-    
+
     FOREACH cell IN gridCELL2D
     {
 	if(test_output3[cell] != test_input3[cell])
@@ -126,10 +126,10 @@ void TestIO(GRID *g)
 	    success = 0;
 	}
     }
-    printf("%d/%d errors for CELL 2D\n",count, g->cellCount);
+    printf("%zu/%d errors for CELL 2D\n",count, g->cellCount);
     total += count;
     count = 0;
-    
+
     FOREACH edge IN gridEDGE2D
     {
 	if(test_output4[edge] != test_input4[edge])
@@ -138,12 +138,12 @@ void TestIO(GRID *g)
 	    success = 0;
 	}
     }
-    printf("%d/%d errors for EDGE 2D\n",count, g->edgeCount);
+    printf("%zu/%d errors for EDGE 2D\n",count, g->edgeCount);
     total += count;
     count = 0;
 
-    printf("%d/%d errors total\n",count, g->height*g->cellCount + g->height*g->edgeCount+ g->cellCount+ g->cellCount);
-	
+    printf("%zu/%d errors total\n",count, g->height*g->cellCount + g->height*g->edgeCount+ g->cellCount+ g->cellCount);
+
     if(success)
     {
 	printf("\nnetcdf io test\x1B[32m succeded\x1B[0m\n");

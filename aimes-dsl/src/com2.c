@@ -51,7 +51,7 @@ void init_op10(GRID* g)
     levelMask = malloc(g->height*sizeof(char));
     levMsk = malloc(g->cBlkCnt*sizeof(char*));
     vcflMax = malloc(g->cBlkCnt*sizeof(GVAL));
-        
+
     for(int b=0;b<g->cBlkCnt;b++){
         levMsk[b] = malloc(g->height*sizeof(char));
         vcflMax[b] = 0.0;
@@ -111,11 +111,13 @@ double com2_memory(GRID* g)
 uint64_t com2_checksum(GRID* g)
 {
     uint64_t ret = 0;
-    return ret;  
+    return ret;
 }
 
 void com2_cleanup(GRID* g)
 {
+    io_cleanup(& io_gv_o9var);
+
     com2.loaded = 0;
     DEALLOC gv_o9var;
     for(int k=0;k<g->height;k++){
@@ -129,5 +131,5 @@ void com2_cleanup(GRID* g)
     }
     free((void*)levMsk);
     free((void*)vcflMax);
-        
+
 }

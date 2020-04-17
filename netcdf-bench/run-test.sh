@@ -1,10 +1,12 @@
 #!/bin/bash
 
-mkfs.esdm -g -l --create --remove
+source ../source.sh
+
+mkfs.esdm -g -l --create --remove --ignore-errors
 ./benchtool -f=esdm://longtest -w -r
 
-mkfs.esdm -g -l --create --remove
-mpiexec -np 2 ./src/benchtool -f="esdm://test.esdm" -n=1 -p=2
+mkfs.esdm -g -l --create --remove --ignore-errors
+mpiexec -np 2 ./benchtool -f="esdm://test.esdm" -n=1 -p=2
 
 
 echo "Cleanup"

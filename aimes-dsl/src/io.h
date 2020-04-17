@@ -1,6 +1,10 @@
 #ifndef TEST_IO_H
 #define TEST_IO_H
 
+#ifdef USE_ESDM
+#include <esdm.h>
+#endif
+
 #include "memory.h"
 
 typedef enum {
@@ -13,14 +17,20 @@ typedef enum {
  * Contains all the information about the variable
  */
 typedef struct{
-  int id; // an module specific ID, this can later be a struct or sth...
   void * memory;
   datatype_t memtype;  // Do we need these?
   datatype_t storagetype;
 
-  // TODO: can the DSL do this book keeping? 
+  // TODO: can the DSL do this book keeping?
   GRID_VAR_POSITION Pos;
   GRID_VAR_DIMENSION Dim;
+
+#ifdef USE_ESDM
+  esdm_dataset_t * dset;
+#else
+  int id;  // NetCDF file ID
+#endif
+
   const char *Name;
 } io_var_t;
 
@@ -32,7 +42,7 @@ typedef struct
     int Head;
     int Tail;
     int isLooped;
-    
+
     io_var_t Elements[32];
 } write_queue;
 
@@ -69,8 +79,13 @@ void io_write_registration_complete(GRID *g);
 void io_write_announce(GRID *g, io_var_t * var);
 
 /*
+ Cleanup the variable
+ */
+void io_cleanup(io_var_t * var);
+
+/*
  * Writes out all the enqueued variables
- * TODO: maybe a more fitting name? 
+ * TODO: maybe a more fitting name?
  */
 void io_write_start(GRID *g);
 

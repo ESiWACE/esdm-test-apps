@@ -151,11 +151,14 @@ uint64_t com4_checksum(GRID* g)
     {
             ret += (uint64_t)gv_o8var[cell];
     }
-    return ret;  
+    return ret;
 }
 
 void com4_cleanup(GRID* g)
 {
+    io_cleanup(& io_gv_o8var);
+    io_cleanup(& io_gv_precInd);
+
     com4.loaded = 0;
     deallocate_variable((void*)gv_precInd, g, GRID_POS_EDGE, GRID_DIM_3D, sizeof(GVAL));
     free((void*)t6Blk);
