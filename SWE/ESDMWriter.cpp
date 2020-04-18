@@ -255,9 +255,14 @@ void io::ESDMWriter::writeVarTimeDependent( const Float2D &i_matrix, esdm_datase
   ret = esdm_write_req_start(& ew, dset, dspace);
   checkRet(ret);
 
-	for(unsigned int col = 0; col < nX; col++) {
+	//for(unsigned int col = 0; col < nX; col++) {
 		// nc_put_vara_float(dataFile, i_ncVariable, start, count,	&i_matrix[col+boundarySize[0]][boundarySize[2]]); //write col
-    esdm_write_req_pack_arr_float(ew, nY, & i_matrix[col + boundarySize[0]][boundarySize[2]]);
+    //esdm_write_req_pack_arr_float(ew, nY, & i_matrix[col + boundarySize[0]][boundarySize[2]]);
+  //}
+  for(int y = 0; y < nY; y++){
+    for(int x = 0; x < nX; x++){
+      esdm_write_req_pack_float(ew, i_matrix[x + boundarySize[0]][boundarySize[2] + y]);
+    }
   }
   ret = esdm_write_req_commit(& ew);
 }
@@ -290,9 +295,14 @@ void io::ESDMWriter::writeVarTimeIndependent( const Float2D &i_matrix, esdm_data
   ret = esdm_write_req_start(& ew, dset, dspace);
   checkRet(ret);
 
-	for(unsigned int col = 0; col < nX; col++) {
-		// nc_put_vara_float(dataFile, i_ncVariable, start, count,	&i_matrix[col+boundarySize[0]][boundarySize[2]]); //write col
-    esdm_write_req_pack_arr_float(ew, nY, & i_matrix[col+boundarySize[0]][boundarySize[2]]);
+	//for(unsigned int col = 0; col < nX; col++) {
+	//	// nc_put_vara_float(dataFile, i_ncVariable, start, count,	&i_matrix[col+boundarySize[0]][boundarySize[2]]); //write col
+  //  esdm_write_req_pack_arr_float(ew, nY, & i_matrix[col+boundarySize[0]][boundarySize[2]]);
+  //}
+  for(int y = 0; y < nY; y++){
+    for(int x = 0; x < nX; x++){
+      esdm_write_req_pack_float(ew, i_matrix[x + boundarySize[0]][boundarySize[2] + y]);
+    }
   }
   ret = esdm_write_req_commit(& ew);
 }
