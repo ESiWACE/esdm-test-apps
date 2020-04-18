@@ -2,7 +2,7 @@
 
 source ../source.sh
 
-CFLAGS="-mtune=native -fstrict-aliasing -fargument-noalias -fopenmp -DNDEBUG -DWAVE_PROPAGATION_SOLVER=1 -DPRINT_NETCDFWRITER_INFORMATION -DSOLVER_FWAVE -DWRITENETCDF -DCOUNTFLOPS -DUSEMPI -Ibuild/ -ISWE/src -ISWE/src/include $CFLAGS -fmessage-length=0 -O3"
+CFLAGS="-mtune=native -fstrict-aliasing -fargument-noalias -fopenmp -DNDEBUG -DWAVE_PROPAGATION_SOLVER=1 -DPRINT_NETCDFWRITER_INFORMATION -DSOLVER_FWAVE -DWRITENETCDF -DCOUNTFLOPS -DUSEMPI -I. -Ibuild/ -ISWE/src -ISWE/src/include $CFLAGS -fmessage-length=0 -O3"
 CXX=mpiCC
 
 mkdir -p build/build_SWE_gnu_release_mpi_fwave

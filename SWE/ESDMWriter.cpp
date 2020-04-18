@@ -86,32 +86,37 @@ io::ESDMWriter::ESDMWriter( const std::string &i_baseName,
 		int i_nX, int i_nY,
 		float i_dX, float i_dY,
 		float i_originX, float i_originY,
-		unsigned int i_flush) :
+		unsigned int i_flush,
+    int fullX, int fullY, int offsetX, int offsetY, float originX, float originY) : offsetX(offsetX), offsetY(offsetY),
     io::Writer(i_baseName, i_b, i_boundarySize, i_nX, i_nY), flush(i_flush)
 {
+  int size;
   esdm_mpi_init();
+  MPI_Comm_rank(MPI_COMM_WORLD, & rank);
+  MPI_Comm_size(MPI_COMM_WORLD, & size);
 
 	//create a ESDM-container, an existing container will be replaced
-  esdm_status ret = esdm_mpi_container_create(MPI_COMM_WORLD, i_baseName.c_str(), true, & container);
+  esdm_status ret = esdm_mpi_container_create(MPI_COMM_WORLD, "swe", true, & container);
   checkRet(ret);
 
-  smd_attr_t * attr;
-
-	//set attributes to match CF-1.5 convention
-  attr = smd_attr_new("Conventions", SMD_DTYPE_STRING, "CF-1.5");
-  esdm_container_link_attribute(container, 1, attr);
-  attr = smd_attr_new("title", SMD_DTYPE_STRING, "Computed tsunami solution");
-  esdm_container_link_attribute(container, 1, attr);
-  attr = smd_attr_new("history", SMD_DTYPE_STRING, "SWE");
-  esdm_container_link_attribute(container, 1, attr);
-	attr = smd_attr_new("institution",  SMD_DTYPE_STRING, "Technische Universitaet Muenchen, Department of Informatics, Chair of Scientific Computing");
-  esdm_container_link_attribute(container, 1, attr);
-	attr = smd_attr_new("source",  SMD_DTYPE_STRING, "Bathymetry and displacement data.");
-  esdm_container_link_attribute(container, 1, attr);
-	attr = smd_attr_new("references",  SMD_DTYPE_STRING, "http://www5.in.tum.de/SWE");
-  esdm_container_link_attribute(container, 1, attr);
-	attr = smd_attr_new("comment",  SMD_DTYPE_STRING, "SWE is free software and licensed under the GNU General Public License. Remark: In general this does not hold for the used input data.");
-  esdm_container_link_attribute(container, 1, attr);
+  if(rank == 0){
+    smd_attr_t * attr;
+  	//set attributes to match CF-1.5 convention
+    attr = smd_attr_new("Conventions", SMD_DTYPE_STRING, "CF-1.5");
+    esdm_container_link_attribute(container, 1, attr);
+    attr = smd_attr_new("title", SMD_DTYPE_STRING, "Computed tsunami solution");
+    esdm_container_link_attribute(container, 1, attr);
+    attr = smd_attr_new("history", SMD_DTYPE_STRING, "SWE");
+    esdm_container_link_attribute(container, 1, attr);
+  	attr = smd_attr_new("institution",  SMD_DTYPE_STRING, "Technische Universitaet Muenchen, Department of Informatics, Chair of Scientific Computing");
+    esdm_container_link_attribute(container, 1, attr);
+  	attr = smd_attr_new("source",  SMD_DTYPE_STRING, "Bathymetry and displacement data.");
+    esdm_container_link_attribute(container, 1, attr);
+  	attr = smd_attr_new("references",  SMD_DTYPE_STRING, "http://www5.in.tum.de/SWE");
+    esdm_container_link_attribute(container, 1, attr);
+  	attr = smd_attr_new("comment",  SMD_DTYPE_STRING, "SWE is free software and licensed under the GNU General Public License. Remark: In general this does not hold for the used input data.");
+    esdm_container_link_attribute(container, 1, attr);
+  }
 
 	//variables add rest of CF-1.5
   esdm_dataspace_t *dspace;
@@ -124,32 +129,71 @@ io::ESDMWriter::ESDMWriter( const std::string &i_baseName,
     esdm_dataset_name_dims(tvar, names);
   }
 	checkRet(ret);
-  attr = smd_attr_new("long_name", SMD_DTYPE_STRING, "Time");
-  esdm_dataset_link_attribute(tvar, 1, attr);
-  attr = smd_attr_new("units", SMD_DTYPE_STRING, "seconds since simulation start");
-  esdm_dataset_link_attribute(tvar, 1, attr);
 
+  if(rank == 0){
+    smd_attr_t * attr;
+    attr = smd_attr_new("long_name", SMD_DTYPE_STRING, "Time");
+    esdm_dataset_link_attribute(tvar, 1, attr);
+    attr = smd_attr_new("units", SMD_DTYPE_STRING, "seconds since simulation start");
+    esdm_dataset_link_attribute(tvar, 1, attr);
+  }
+
+  esdm_dataset_t  * xvar;
+  esdm_dataset_t  * yvar;
   {
-    int64_t b[] = {(int64_t)nX};
+    int64_t b[] = {(int64_t) fullX};
     ret = esdm_dataspace_create(1, b, SMD_DTYPE_FLOAT, & dspace);
     checkRet(ret);
     ret = esdm_mpi_dataset_create(MPI_COMM_WORLD, container, "x", dspace, & xvar);
-  	checkRet(ret);
+    checkRet(ret);
     char * const names[]= { (char*) "x" };
     esdm_dataset_name_dims(xvar, names);
   }
   {
-    int64_t b[] = {(int64_t) nY};
+    int64_t b[] = {(int64_t) fullY};
     ret = esdm_dataspace_create(1, b, SMD_DTYPE_FLOAT, & dspace);
     checkRet(ret);
     ret = esdm_mpi_dataset_create(MPI_COMM_WORLD, container, "y", dspace, & yvar);
-  	checkRet(ret);
+    checkRet(ret);
     char * const names[]= { (char*) "y" };
     esdm_dataset_name_dims(yvar, names);
   }
+  if(rank == 0){
+    //setup grid size
+    esdm_write_request_t ew;
+    int64_t b[] = {(int64_t) fullX};
+    ret = esdm_dataspace_create(1, b, SMD_DTYPE_FLOAT, & dspace);
+    ret = esdm_write_req_start(& ew, xvar, dspace);
+    checkRet(ret);
+
+  	for(size_t i = 0; i < fullX; i++) {
+      float gridPosition = originX + (float).5 * i_dX * (i + 1);
+      esdm_write_req_pack_float(ew, gridPosition);
+  	}
+    esdm_write_req_commit(& ew);
+  }
+  if((rank == 0 && size == 1) || rank == 1){
+    esdm_write_request_t ew;
+    int64_t b[] = {(int64_t) fullY};
+    ret = esdm_dataspace_create(1, b, SMD_DTYPE_FLOAT, & dspace);
+    ret = esdm_write_req_start(& ew, yvar, dspace);
+    checkRet(ret);
+
+  	for(size_t i = 0; i < fullY; i++) {
+      float gridPosition = originY + (float).5 * i_dY * (i + 1);
+      esdm_write_req_pack_float(ew, gridPosition);
+  	}
+    esdm_write_req_commit(& ew);
+  }
+  esdm_mpi_dataset_commit(MPI_COMM_WORLD, xvar);
+  esdm_dataset_close(xvar);
+
+  esdm_mpi_dataset_commit(MPI_COMM_WORLD, yvar);
+  esdm_dataset_close(yvar);
+
   {
     char * const names[]= { (char*) "time", (char*) "y", (char*) "x"};
-    int64_t b[] = {0, (int64_t) nY, (int64_t) nX};
+    int64_t b[] = {0, (int64_t) fullY, (int64_t) fullX};
     ret = esdm_dataspace_create(3, b, SMD_DTYPE_FLOAT, & dspace);
     ret = esdm_mpi_dataset_create(MPI_COMM_WORLD, container, "h", dspace, & hvar);
   	checkRet(ret);
@@ -165,41 +209,12 @@ io::ESDMWriter::ESDMWriter( const std::string &i_baseName,
     esdm_dataset_name_dims(hvvar, names);
   }
   {
-    int64_t b[] = {(int64_t) nY, (int64_t) nX};
+    int64_t b[] = {(int64_t) fullY, (int64_t) fullX};
     char * const names[]= { (char*) "y", (char*) "x"};
     ret = esdm_dataspace_create(2, b, SMD_DTYPE_FLOAT, & dspace);
     ret = esdm_mpi_dataset_create(MPI_COMM_WORLD, container, "b", dspace, & bvar);
     checkRet(ret);
     esdm_dataset_name_dims(bvar, names);
-  }
-
-  //setup grid size
-  {
-    esdm_write_request_t ew;
-    int64_t b[] = {(int64_t) nX};
-    ret = esdm_dataspace_create(1, b, SMD_DTYPE_FLOAT, & dspace);
-    ret = esdm_write_req_start(& ew, xvar, dspace);
-    checkRet(ret);
-
-  	for(size_t i = 0; i < nX; i++) {
-      float gridPosition = i_originX + (float).5 * i_dX * (i + 1);
-      esdm_write_req_pack_float(ew, gridPosition);
-  	}
-    esdm_write_req_commit(& ew);
-  }
-
-  {
-    esdm_write_request_t ew;
-    int64_t b[] = {(int64_t) nY};
-    ret = esdm_dataspace_create(1, b, SMD_DTYPE_FLOAT, & dspace);
-    ret = esdm_write_req_start(& ew, yvar, dspace);
-    checkRet(ret);
-
-  	for(size_t i = 0; i < nY; i++) {
-      float gridPosition = i_originY + (float).5 * i_dY * (i + 1);
-      esdm_write_req_pack_float(ew, gridPosition);
-  	}
-    esdm_write_req_commit(& ew);
   }
 }
 
@@ -207,8 +222,10 @@ io::ESDMWriter::ESDMWriter( const std::string &i_baseName,
  * Destructor
  */
 io::ESDMWriter::~ESDMWriter() {
+  esdm_mpi_container_commit(MPI_COMM_WORLD, container);
 	esdm_container_close(container);
   esdm_mpi_finalize();
+  MPI_Finalize();
 }
 
 /**
