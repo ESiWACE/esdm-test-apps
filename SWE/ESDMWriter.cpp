@@ -14,22 +14,56 @@ static inline void checkRet(esdm_status ret){
 }
 
 struct esdm_write_request_t {
+  esdm_dataset_t * dset;
+  esdm_dataspace_t * file_space;
+  uint64_t size;
 
+  char * buffer;
+  char * bpos;
 };
 
-typedef struct esdm_write_request_t esdm_write_request_t;
+typedef struct esdm_write_request_t   esdm_write_request_t;
 
 esdm_status esdm_write_req_start(esdm_write_request_t * req_out, esdm_dataset_t * dset, esdm_dataspace_t * file_space);
 esdm_status esdm_write_req_commit(esdm_write_request_t * req);
-#define esdm_write_req_pack_float(req, data)
 
-esdm_status esdm_write_req_start(esdm_write_request_t * req_out, esdm_dataset_t * dset, esdm_dataspace_t * file_space){
+esdm_status esdm_write_req_start(esdm_write_request_t * req, esdm_dataset_t * dset, esdm_dataspace_t * file_space){
+  req->dset = dset;
+  req->file_space = file_space;
+  uint64_t size = esdm_dataspace_get_total_byte(file_space);
+  req->buffer = (char*) malloc(size);
+  req->bpos = req->buffer;
+  req->size = size;
+  assert(req->buffer);
   return ESDM_SUCCESS;
 }
 
 esdm_status esdm_write_req_commit(esdm_write_request_t * req){
-    return ESDM_SUCCESS;
+  if(req->bpos != req->buffer + req->size){
+    printf("ERROR\n");
+    exit(1);
+  }
+  esdm_write(req->dset, req->buffer, req->file_space, NULL);
+
+  free(req->buffer);
+  req->buffer = NULL;
+  return ESDM_SUCCESS;
 }
+
+// Emulation:
+#define esdm_write_req_pack_float(rq, data) \
+    do { \
+    assert(rq.buffer != NULL); \
+    *((float*) rq.bpos) = data; \
+    rq.bpos += sizeof(float); \
+  } while(0);
+
+#define esdm_write_req_pack_arr_float(rq, size, data)\
+  do { \
+  assert(rq.buffer != NULL); \
+  memcpy(rq.bpos, data, size * sizeof(float)); \
+  rq.bpos += size * sizeof(float);\
+  } while(0);
 
 
 /**
@@ -85,6 +119,10 @@ io::ESDMWriter::ESDMWriter( const std::string &i_baseName,
   ret = esdm_dataspace_create(1, b1, SMD_DTYPE_FLOAT, & dspace);
   checkRet(ret);
   ret = esdm_mpi_dataset_create(MPI_COMM_WORLD, container, "time", dspace, & tvar);
+  {
+    char * const names[]= { (char*)"time" };
+    esdm_dataset_name_dims(tvar, names);
+  }
 	checkRet(ret);
   attr = smd_attr_new("long_name", SMD_DTYPE_STRING, "Time");
   esdm_dataset_link_attribute(tvar, 1, attr);
@@ -97,6 +135,8 @@ io::ESDMWriter::ESDMWriter( const std::string &i_baseName,
     checkRet(ret);
     ret = esdm_mpi_dataset_create(MPI_COMM_WORLD, container, "x", dspace, & xvar);
   	checkRet(ret);
+    char * const names[]= { (char*) "x" };
+    esdm_dataset_name_dims(xvar, names);
   }
   {
     int64_t b[] = {(int64_t) nY};
@@ -104,8 +144,11 @@ io::ESDMWriter::ESDMWriter( const std::string &i_baseName,
     checkRet(ret);
     ret = esdm_mpi_dataset_create(MPI_COMM_WORLD, container, "y", dspace, & yvar);
   	checkRet(ret);
+    char * const names[]= { (char*) "y" };
+    esdm_dataset_name_dims(yvar, names);
   }
   {
+    char * const names[]= { (char*) "time", (char*) "y", (char*) "x"};
     int64_t b[] = {0, (int64_t) nY, (int64_t) nX};
     ret = esdm_dataspace_create(3, b, SMD_DTYPE_FLOAT, & dspace);
     ret = esdm_mpi_dataset_create(MPI_COMM_WORLD, container, "h", dspace, & hvar);
@@ -116,12 +159,18 @@ io::ESDMWriter::ESDMWriter( const std::string &i_baseName,
     ret = esdm_dataspace_create(3, b, SMD_DTYPE_FLOAT, & dspace);
     ret = esdm_mpi_dataset_create(MPI_COMM_WORLD, container, "hv", dspace, & hvvar);
   	checkRet(ret);
+
+    esdm_dataset_name_dims(hvar, names);
+    esdm_dataset_name_dims(huvar, names);
+    esdm_dataset_name_dims(hvvar, names);
   }
   {
     int64_t b[] = {(int64_t) nY, (int64_t) nX};
+    char * const names[]= { (char*) "y", (char*) "x"};
     ret = esdm_dataspace_create(2, b, SMD_DTYPE_FLOAT, & dspace);
     ret = esdm_mpi_dataset_create(MPI_COMM_WORLD, container, "b", dspace, & bvar);
     checkRet(ret);
+    esdm_dataset_name_dims(bvar, names);
   }
 
   //setup grid size
@@ -134,7 +183,7 @@ io::ESDMWriter::ESDMWriter( const std::string &i_baseName,
 
   	for(size_t i = 0; i < nX; i++) {
       float gridPosition = i_originX + (float).5 * i_dX * (i + 1);
-      esdm_write_req_pack_float(& ew, & gridPosition);
+      esdm_write_req_pack_float(ew, gridPosition);
   	}
     esdm_write_req_commit(& ew);
   }
@@ -148,7 +197,7 @@ io::ESDMWriter::ESDMWriter( const std::string &i_baseName,
 
   	for(size_t i = 0; i < nY; i++) {
       float gridPosition = i_originY + (float).5 * i_dY * (i + 1);
-      esdm_write_req_pack_float(& ew, & gridPosition);
+      esdm_write_req_pack_float(ew, gridPosition);
   	}
     esdm_write_req_commit(& ew);
   }
@@ -186,11 +235,12 @@ void io::ESDMWriter::writeVarTimeDependent( const Float2D &i_matrix, esdm_datase
   ret = esdm_dataspace_create_full(3, size, offset, SMD_DTYPE_FLOAT, & dspace);
 
   esdm_write_request_t ew;
-  ret = esdm_write_req_start(& ew, xvar, dspace);
+  ret = esdm_write_req_start(& ew, dset, dspace);
   checkRet(ret);
 
 	for(unsigned int col = 0; col < nX; col++) {
-		// TODO nc_put_vara_float(dataFile, i_ncVariable, start, count,	&i_matrix[col+boundarySize[0]][boundarySize[2]]); //write col
+		// nc_put_vara_float(dataFile, i_ncVariable, start, count,	&i_matrix[col+boundarySize[0]][boundarySize[2]]); //write col
+    esdm_write_req_pack_arr_float(ew, nY, & i_matrix[col + boundarySize[0]][boundarySize[2]]);
   }
   ret = esdm_write_req_commit(& ew);
 }
@@ -219,11 +269,12 @@ void io::ESDMWriter::writeVarTimeIndependent( const Float2D &i_matrix, esdm_data
   ret = esdm_dataspace_create(2, size, SMD_DTYPE_FLOAT, & dspace);
 
   esdm_write_request_t ew;
-  ret = esdm_write_req_start(& ew, xvar, dspace);
+  ret = esdm_write_req_start(& ew, dset, dspace);
   checkRet(ret);
 
 	for(unsigned int col = 0; col < nX; col++) {
-		// TODO nc_put_vara_float(dataFile, i_ncVariable, start, count,	&i_matrix[col+boundarySize[0]][boundarySize[2]]); //write col
+		// nc_put_vara_float(dataFile, i_ncVariable, start, count,	&i_matrix[col+boundarySize[0]][boundarySize[2]]); //write col
+    esdm_write_req_pack_arr_float(ew, nY, & i_matrix[col+boundarySize[0]][boundarySize[2]]);
   }
   ret = esdm_write_req_commit(& ew);
 }
