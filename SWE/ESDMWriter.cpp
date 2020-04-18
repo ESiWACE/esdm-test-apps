@@ -244,7 +244,7 @@ void io::ESDMWriter::writeVarTimeDependent( const Float2D &i_matrix, esdm_datase
 	//write col wise, necessary to get rid of the boundary
 	//storage in Float2D is col wise
 	//read carefully, the dimensions are confusing
-	int64_t offset[] = {(int64_t) timeStep, 0, 0};
+	int64_t offset[] = {(int64_t) timeStep, offsetY, offsetX};
 	int64_t size[] = {1, (int64_t) nY, (int64_t) nX};
 
   esdm_dataspace_t *dspace;
@@ -279,11 +279,12 @@ void io::ESDMWriter::writeVarTimeIndependent( const Float2D &i_matrix, esdm_data
 	//storage in Float2D is col wise
 	//read carefully, the dimensions are confusing
 	int64_t size[] = {(int64_t) nY, (int64_t) nX};
+  int64_t offset[] = {offsetY, offsetX};
 
 
   esdm_dataspace_t *dspace;
   esdm_status ret;
-  ret = esdm_dataspace_create(2, size, SMD_DTYPE_FLOAT, & dspace);
+  ret = esdm_dataspace_create_full(2, size, offset, SMD_DTYPE_FLOAT, & dspace);
 
   esdm_write_request_t ew;
   ret = esdm_write_req_start(& ew, dset, dspace);
@@ -321,13 +322,15 @@ void io::ESDMWriter::writeTimeStep( const Float2D &i_h,
 
 	//write i_time
 	// nc_put_var1_float(dataFile, timeVar, &timeStep, &i_time);
-  esdm_status ret;
-  esdm_dataspace_t *dspace;
-  int64_t offset[] = {(int64_t) timeStep};
-  int64_t size[] = {1};
-  ret = esdm_dataspace_create_full(1, size, offset, SMD_DTYPE_FLOAT, & dspace);
-  ret = esdm_write(tvar, & i_time, dspace, NULL);
-  checkRet(ret);
+  if(rank == 0){
+    esdm_status ret;
+    esdm_dataspace_t *dspace;
+    int64_t offset[] = {(int64_t) timeStep};
+    int64_t size[] = {1};
+    ret = esdm_dataspace_create_full(1, size, offset, SMD_DTYPE_FLOAT, & dspace);
+    ret = esdm_write(tvar, & i_time, dspace, NULL);
+    checkRet(ret);
+  }
 
 	//write water height
 	writeVarTimeDependent(i_h, hvar);

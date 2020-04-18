@@ -22,8 +22,8 @@ private:
     esdm_dataset_t   * huvar;
     esdm_dataset_t   * bvar;
 
-    int offsetX;
-    int offsetY;
+    int64_t offsetX;
+    int64_t offsetY;
 
     /** Flush after every x write operation? */
     unsigned int flush;
