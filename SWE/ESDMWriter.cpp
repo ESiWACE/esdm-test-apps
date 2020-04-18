@@ -3,48 +3,7 @@
 #include <iostream>
 #include <cassert>
 
-#include <writer/Writer.hh>
-
-namespace io {
-  class NetCdfWriter;
-}
-
-// include ESDM containers from C++ code via:
-#include <esdm.h>
-#include <esdm-mpi.h>
-
-class io::NetCdfWriter : public io::Writer {
-private:
-    esdm_container_t * container;
-    esdm_dataset_t   * tvar;
-    esdm_dataset_t   * xvar;
-    esdm_dataset_t   * yvar;
-    esdm_dataset_t   * hvar;
-    esdm_dataset_t   * hvvar;
-    esdm_dataset_t   * huvar;
-    esdm_dataset_t   * bvar;
-
-    /** Flush after every x write operation? */
-    unsigned int flush;
-
-    // writer time dependent variables.
-    void writeVarTimeDependent( const Float2D &i_matrix, esdm_dataset_t * dset);
-    // writes time independent variables.
-    void writeVarTimeIndependent( const Float2D &i_matrix, esdm_dataset_t * dset);
-
-  public:
-    NetCdfWriter(const std::string &i_fileName,
-    			 const Float2D &i_b,
-                 const BoundarySize &i_boundarySize,
-                 int i_nX, int i_nY,
-                 float i_dX, float i_dY,
-                 float i_originX = 0., float i_originY = 0.,
-                 unsigned int i_flush = 0);
-    virtual ~NetCdfWriter();
-
-    // writes the unknowns at a given time step
-    void writeTimeStep( const Float2D &i_h, const Float2D &i_hu, const Float2D &i_hv, float i_time);
-};
+#include <ESDMWriter.hh>
 
 static inline void checkRet(esdm_status ret){
   	if (ret != ESDM_SUCCESS) {
@@ -87,7 +46,7 @@ esdm_status esdm_write_req_commit(esdm_write_request_t * req){
  * @param i_flush If > 0, flush data to disk every i_flush write operation
  * @param i_dynamicBathymetry
  */
-io::NetCdfWriter::NetCdfWriter( const std::string &i_baseName,
+io::ESDMWriter::ESDMWriter( const std::string &i_baseName,
 		const Float2D &i_b,
 		const BoundarySize &i_boundarySize,
 		int i_nX, int i_nY,
@@ -96,6 +55,8 @@ io::NetCdfWriter::NetCdfWriter( const std::string &i_baseName,
 		unsigned int i_flush) :
     io::Writer(i_baseName, i_b, i_boundarySize, i_nX, i_nY), flush(i_flush)
 {
+  esdm_mpi_init();
+
 	//create a ESDM-container, an existing container will be replaced
   esdm_status ret = esdm_mpi_container_create(MPI_COMM_WORLD, i_baseName.c_str(), true, & container);
   checkRet(ret);
@@ -131,21 +92,21 @@ io::NetCdfWriter::NetCdfWriter( const std::string &i_baseName,
   esdm_dataset_link_attribute(tvar, 1, attr);
 
   {
-    int64_t b[] = {nX};
+    int64_t b[] = {(int64_t)nX};
     ret = esdm_dataspace_create(1, b, SMD_DTYPE_FLOAT, & dspace);
     checkRet(ret);
     ret = esdm_mpi_dataset_create(MPI_COMM_WORLD, container, "x", dspace, & xvar);
   	checkRet(ret);
   }
   {
-    int64_t b[] = {nY};
+    int64_t b[] = {(int64_t) nY};
     ret = esdm_dataspace_create(1, b, SMD_DTYPE_FLOAT, & dspace);
     checkRet(ret);
     ret = esdm_mpi_dataset_create(MPI_COMM_WORLD, container, "y", dspace, & yvar);
   	checkRet(ret);
   }
   {
-    int64_t b[] = {0, nY, nX};
+    int64_t b[] = {0, (int64_t) nY, (int64_t) nX};
     ret = esdm_dataspace_create(3, b, SMD_DTYPE_FLOAT, & dspace);
     ret = esdm_mpi_dataset_create(MPI_COMM_WORLD, container, "h", dspace, & hvar);
   	checkRet(ret);
@@ -157,7 +118,7 @@ io::NetCdfWriter::NetCdfWriter( const std::string &i_baseName,
   	checkRet(ret);
   }
   {
-    int64_t b[] = {nY, nX};
+    int64_t b[] = {(int64_t) nY, (int64_t) nX};
     ret = esdm_dataspace_create(2, b, SMD_DTYPE_FLOAT, & dspace);
     ret = esdm_mpi_dataset_create(MPI_COMM_WORLD, container, "b", dspace, & bvar);
     checkRet(ret);
@@ -166,7 +127,7 @@ io::NetCdfWriter::NetCdfWriter( const std::string &i_baseName,
   //setup grid size
   {
     esdm_write_request_t ew;
-    int64_t b[] = {nX};
+    int64_t b[] = {(int64_t) nX};
     ret = esdm_dataspace_create(1, b, SMD_DTYPE_FLOAT, & dspace);
     ret = esdm_write_req_start(& ew, xvar, dspace);
     checkRet(ret);
@@ -180,7 +141,7 @@ io::NetCdfWriter::NetCdfWriter( const std::string &i_baseName,
 
   {
     esdm_write_request_t ew;
-    int64_t b[] = {nY};
+    int64_t b[] = {(int64_t) nY};
     ret = esdm_dataspace_create(1, b, SMD_DTYPE_FLOAT, & dspace);
     ret = esdm_write_req_start(& ew, yvar, dspace);
     checkRet(ret);
@@ -196,8 +157,9 @@ io::NetCdfWriter::NetCdfWriter( const std::string &i_baseName,
 /**
  * Destructor
  */
-io::NetCdfWriter::~NetCdfWriter() {
+io::ESDMWriter::~ESDMWriter() {
 	esdm_container_close(container);
+  esdm_mpi_finalize();
 }
 
 /**
@@ -212,23 +174,22 @@ io::NetCdfWriter::~NetCdfWriter() {
  * @param i_boundarySize size of the boundaries.
  * @param i_ncVariable time dependent ESDM-variable to which the output is written to.
  */
-void io::NetCdfWriter::writeVarTimeDependent( const Float2D &i_matrix, esdm_dataset_t * dset) {
+void io::ESDMWriter::writeVarTimeDependent( const Float2D &i_matrix, esdm_dataset_t * dset) {
 	//write col wise, necessary to get rid of the boundary
 	//storage in Float2D is col wise
 	//read carefully, the dimensions are confusing
-	size_t start[] = {timeStep, 0, 0};
-	size_t count[] = {1, nY, 1};
+	int64_t offset[] = {(int64_t) timeStep, 0, 0};
+	int64_t size[] = {1, (int64_t) nY, (int64_t) nX};
 
   esdm_dataspace_t *dspace;
   esdm_status ret;
-  //esdm_dataspace_create(3, b, SMD_DTYPE_FLOAT, & dspace);
+  ret = esdm_dataspace_create_full(3, size, offset, SMD_DTYPE_FLOAT, & dspace);
 
   esdm_write_request_t ew;
   ret = esdm_write_req_start(& ew, xvar, dspace);
   checkRet(ret);
 
 	for(unsigned int col = 0; col < nX; col++) {
-		start[2] = col; //select col (dim "x")
 		// TODO nc_put_vara_float(dataFile, i_ncVariable, start, count,	&i_matrix[col+boundarySize[0]][boundarySize[2]]); //write col
   }
   ret = esdm_write_req_commit(& ew);
@@ -246,16 +207,25 @@ void io::NetCdfWriter::writeVarTimeDependent( const Float2D &i_matrix, esdm_data
  * @param i_boundarySize size of the boundaries.
  * @param i_ncVariable time independent ESDM-variable to which the output is written to.
  */
-void io::NetCdfWriter::writeVarTimeIndependent( const Float2D &i_matrix, esdm_dataset_t * dset ) {
+void io::ESDMWriter::writeVarTimeIndependent( const Float2D &i_matrix, esdm_dataset_t * dset ) {
 	//write col wise, necessary to get rid of the boundary
 	//storage in Float2D is col wise
 	//read carefully, the dimensions are confusing
-	size_t start[] = {0, 0};
-	size_t count[] = {nY, 1};
+	int64_t size[] = {(int64_t) nY, (int64_t) nX};
+
+
+  esdm_dataspace_t *dspace;
+  esdm_status ret;
+  ret = esdm_dataspace_create(2, size, SMD_DTYPE_FLOAT, & dspace);
+
+  esdm_write_request_t ew;
+  ret = esdm_write_req_start(& ew, xvar, dspace);
+  checkRet(ret);
+
 	for(unsigned int col = 0; col < nX; col++) {
-		start[1] = col; //select col (dim "x")
 		// TODO nc_put_vara_float(dataFile, i_ncVariable, start, count,	&i_matrix[col+boundarySize[0]][boundarySize[2]]); //write col
   }
+  ret = esdm_write_req_commit(& ew);
 }
 
 /**
@@ -272,7 +242,7 @@ void io::NetCdfWriter::writeVarTimeIndependent( const Float2D &i_matrix, esdm_da
  * @param i_boundarySize size of the boundaries.
  * @param i_time simulation time of the time step.
  */
-void io::NetCdfWriter::writeTimeStep( const Float2D &i_h,
+void io::ESDMWriter::writeTimeStep( const Float2D &i_h,
                                       const Float2D &i_hu,
                                       const Float2D &i_hv,
                                       float i_time) {
@@ -282,7 +252,14 @@ void io::NetCdfWriter::writeTimeStep( const Float2D &i_h,
   }
 
 	//write i_time
-	// TODO: nc_put_var1_float(dataFile, timeVar, &timeStep, &i_time);
+	// nc_put_var1_float(dataFile, timeVar, &timeStep, &i_time);
+  esdm_status ret;
+  esdm_dataspace_t *dspace;
+  int64_t offset[] = {(int64_t) timeStep};
+  int64_t size[] = {1};
+  ret = esdm_dataspace_create_full(1, size, offset, SMD_DTYPE_FLOAT, & dspace);
+  ret = esdm_write(tvar, & i_time, dspace, NULL);
+  checkRet(ret);
 
 	//write water height
 	writeVarTimeDependent(i_h, hvar);
