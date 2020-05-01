@@ -30,7 +30,7 @@ esdm_status esdm_write_req_commit(esdm_write_request_t * req);
 esdm_status esdm_write_req_start(esdm_write_request_t * req, esdm_dataset_t * dset, esdm_dataspace_t * file_space){
   req->dset = dset;
   req->file_space = file_space;
-  uint64_t size = esdm_dataspace_get_total_byte(file_space);
+  uint64_t size = esdm_dataspace_total_bytes(file_space);
   req->buffer = (char*) malloc(size);
   req->bpos = req->buffer;
   req->size = size;
@@ -43,7 +43,7 @@ esdm_status esdm_write_req_commit(esdm_write_request_t * req){
     printf("ERROR\n");
     exit(1);
   }
-  esdm_write(req->dset, req->buffer, req->file_space, NULL);
+  esdm_write(req->dset, req->buffer, req->file_space);
 
   free(req->buffer);
   req->buffer = NULL;
@@ -338,7 +338,7 @@ void io::ESDMWriter::writeTimeStep( const Float2D &i_h,
     int64_t offset[] = {(int64_t) timeStep};
     int64_t size[] = {1};
     ret = esdm_dataspace_create_full(1, size, offset, SMD_DTYPE_FLOAT, & dspace);
-    ret = esdm_write(tvar, & i_time, dspace, NULL);
+    ret = esdm_write(tvar, & i_time, dspace);
     checkRet(ret);
   }
 
