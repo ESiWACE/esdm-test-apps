@@ -13,57 +13,13 @@ static inline void checkRet(esdm_status ret){
   	}
 }
 
-struct esdm_write_request_t {
-  esdm_dataset_t * dset;
-  esdm_dataspace_t * file_space;
-  uint64_t size;
 
-  char * buffer;
-  char * bpos;
-};
-
-typedef struct esdm_write_request_t   esdm_write_request_t;
-
-esdm_status esdm_write_req_start(esdm_write_request_t * req_out, esdm_dataset_t * dset, esdm_dataspace_t * file_space);
-esdm_status esdm_write_req_commit(esdm_write_request_t * req);
-
-esdm_status esdm_write_req_start(esdm_write_request_t * req, esdm_dataset_t * dset, esdm_dataspace_t * file_space){
-  req->dset = dset;
-  req->file_space = file_space;
-  uint64_t size = esdm_dataspace_total_bytes(file_space);
-  req->buffer = (char*) malloc(size);
-  req->bpos = req->buffer;
-  req->size = size;
-  assert(req->buffer);
-  return ESDM_SUCCESS;
-}
-
-esdm_status esdm_write_req_commit(esdm_write_request_t * req){
-  if(req->bpos != req->buffer + req->size){
-    printf("ERROR\n");
-    exit(1);
-  }
-  esdm_write(req->dset, req->buffer, req->file_space);
-
-  free(req->buffer);
-  req->buffer = NULL;
-  return ESDM_SUCCESS;
-}
-
-// Emulation:
-#define esdm_write_req_pack_float(rq, data) \
-    do { \
-    assert(rq.buffer != NULL); \
-    *((float*) rq.bpos) = data; \
-    rq.bpos += sizeof(float); \
-  } while(0);
-
-#define esdm_write_req_pack_arr_float(rq, size, data)\
-  do { \
-  assert(rq.buffer != NULL); \
-  memcpy(rq.bpos, data, size * sizeof(float)); \
-  rq.bpos += size * sizeof(float);\
-  } while(0);
+//#define esdm_write_req_pack_arr_float(rq, size, data)\
+//  do { \
+//  assert(rq.buffer != NULL); \
+//  memcpy(rq.bpos, data, size * sizeof(float)); \
+//  rq.bpos += size * sizeof(float);\
+//  } while(0);
 
 
 /**
@@ -160,7 +116,7 @@ io::ESDMWriter::ESDMWriter( const std::string &i_baseName,
   }
   if(rank == 0){
     //setup grid size
-    esdm_write_request_t ew;
+    esdm_write_request_t * ew;
     int64_t b[] = {(int64_t) fullX};
     ret = esdm_dataspace_create(1, b, SMD_DTYPE_FLOAT, & dspace);
     ret = esdm_write_req_start(& ew, xvar, dspace);
@@ -170,10 +126,10 @@ io::ESDMWriter::ESDMWriter( const std::string &i_baseName,
       float gridPosition = originX + (float).5 * i_dX * (i + 1);
       esdm_write_req_pack_float(ew, gridPosition);
   	}
-    esdm_write_req_commit(& ew);
+    esdm_write_req_commit(ew);
   }
   if((rank == 0 && size == 1) || rank == 1){
-    esdm_write_request_t ew;
+    esdm_write_request_t * ew;
     int64_t b[] = {(int64_t) fullY};
     ret = esdm_dataspace_create(1, b, SMD_DTYPE_FLOAT, & dspace);
     ret = esdm_write_req_start(& ew, yvar, dspace);
@@ -183,7 +139,7 @@ io::ESDMWriter::ESDMWriter( const std::string &i_baseName,
       float gridPosition = originY + (float).5 * i_dY * (i + 1);
       esdm_write_req_pack_float(ew, gridPosition);
   	}
-    esdm_write_req_commit(& ew);
+    esdm_write_req_commit(ew);
   }
   esdm_mpi_dataset_commit(MPI_COMM_WORLD, xvar);
   esdm_dataset_close(xvar);
@@ -251,7 +207,7 @@ void io::ESDMWriter::writeVarTimeDependent( const Float2D &i_matrix, esdm_datase
   esdm_status ret;
   ret = esdm_dataspace_create_full(3, size, offset, SMD_DTYPE_FLOAT, & dspace);
 
-  esdm_write_request_t ew;
+  esdm_write_request_t * ew;
   ret = esdm_write_req_start(& ew, dset, dspace);
   checkRet(ret);
 
@@ -264,7 +220,7 @@ void io::ESDMWriter::writeVarTimeDependent( const Float2D &i_matrix, esdm_datase
       esdm_write_req_pack_float(ew, i_matrix[x + boundarySize[0]][boundarySize[2] + y]);
     }
   }
-  ret = esdm_write_req_commit(& ew);
+  ret = esdm_write_req_commit(ew);
 }
 
 /**
@@ -291,7 +247,7 @@ void io::ESDMWriter::writeVarTimeIndependent( const Float2D &i_matrix, esdm_data
   esdm_status ret;
   ret = esdm_dataspace_create_full(2, size, offset, SMD_DTYPE_FLOAT, & dspace);
 
-  esdm_write_request_t ew;
+  esdm_write_request_t * ew;
   ret = esdm_write_req_start(& ew, dset, dspace);
   checkRet(ret);
 
@@ -304,7 +260,7 @@ void io::ESDMWriter::writeVarTimeIndependent( const Float2D &i_matrix, esdm_data
       esdm_write_req_pack_float(ew, i_matrix[x + boundarySize[0]][boundarySize[2] + y]);
     }
   }
-  ret = esdm_write_req_commit(& ew);
+  ret = esdm_write_req_commit(ew);
 }
 
 /**
