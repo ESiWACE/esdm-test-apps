@@ -32,7 +32,15 @@ $ cp ESD-Middleware/src/test/esdm.conf .
 
 Create ESDM data directories
 $ export PATH=.../ESD-Middleware/install/bin/:$PATH
+$ export PATH=/home/kunkel/ur-git/esiwace/ESD-Middleware/install/bin/:$PATH
 $ mkfs.esdm -g -l --create  --remove --ignore-errors
 
 Run XIOS MPMD with OpenMPI:
 $ mpiexec -np 2 bin/xios_server.exe : -np 3 bin/test_client.exe
+
+
+<file_definition format="netcdf4" time_counter="instant" type="one_file" >
+      <file id="output_ens" name="esdm://ens_test_512" output_freq="1h">
+        <field field_ref="u" name="ui" grid_ref="grid_ens_in" operation="instant" />
+      </file>
+</file_definition>
