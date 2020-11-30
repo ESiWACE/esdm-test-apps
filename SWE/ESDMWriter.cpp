@@ -4,6 +4,7 @@
 #include <cassert>
 
 #include <ESDMWriter.hh>
+#include <esdm-stream.h>
 
 static inline void checkRet(esdm_status ret){
   	if (ret != ESDM_SUCCESS) {
@@ -116,30 +117,28 @@ io::ESDMWriter::ESDMWriter( const std::string &i_baseName,
   }
   if(rank == 0){
     //setup grid size
-    esdm_write_request_t * ew;
-    int64_t b[] = {(int64_t) fullX};
-    ret = esdm_dataspace_create(1, b, SMD_DTYPE_FLOAT, & dspace);
-    ret = esdm_write_req_start(& ew, xvar, dspace);
-    checkRet(ret);
+    esdm_wstream_float_t ew;
+    int64_t off = 0;
+    int64_t size = fullX;
+    esdm_wstream_start(& ew, xvar, 1, & off, & size);
 
   	for(size_t i = 0; i < fullX; i++) {
       float gridPosition = originX + (float).5 * i_dX * (i + 1);
-      esdm_write_req_pack_float(ew, gridPosition);
+      esdm_wstream_pack(ew, gridPosition);
   	}
-    esdm_write_req_commit(ew);
+    esdm_wstream_commit(ew);
   }
   if((rank == 0 && size == 1) || rank == 1){
-    esdm_write_request_t * ew;
+    esdm_wstream_float_t ew;
     int64_t b[] = {(int64_t) fullY};
-    ret = esdm_dataspace_create(1, b, SMD_DTYPE_FLOAT, & dspace);
-    ret = esdm_write_req_start(& ew, yvar, dspace);
-    checkRet(ret);
+    int64_t off = 0;
+    esdm_wstream_start(& ew, yvar, 1, & off, b);
 
   	for(size_t i = 0; i < fullY; i++) {
       float gridPosition = originY + (float).5 * i_dY * (i + 1);
-      esdm_write_req_pack_float(ew, gridPosition);
+      esdm_wstream_pack(ew, gridPosition);
   	}
-    esdm_write_req_commit(ew);
+    esdm_wstream_commit(ew);
   }
   esdm_mpi_dataset_commit(MPI_COMM_WORLD, xvar);
   esdm_dataset_close(xvar);
@@ -202,14 +201,9 @@ void io::ESDMWriter::writeVarTimeDependent( const Float2D &i_matrix, esdm_datase
 	//read carefully, the dimensions are confusing
 	int64_t offset[] = {(int64_t) timeStep, offsetY, offsetX};
 	int64_t size[] = {1, (int64_t) nY, (int64_t) nX};
-
-  esdm_dataspace_t *dspace;
   esdm_status ret;
-  ret = esdm_dataspace_create_full(3, size, offset, SMD_DTYPE_FLOAT, & dspace);
-
-  esdm_write_request_t * ew;
-  ret = esdm_write_req_start(& ew, dset, dspace);
-  checkRet(ret);
+  esdm_wstream_float_t ew;
+  esdm_wstream_start(& ew, dset, 3, offset, size);
 
 	//for(unsigned int col = 0; col < nX; col++) {
 		// nc_put_vara_float(dataFile, i_ncVariable, start, count,	&i_matrix[col+boundarySize[0]][boundarySize[2]]); //write col
@@ -217,10 +211,10 @@ void io::ESDMWriter::writeVarTimeDependent( const Float2D &i_matrix, esdm_datase
   //}
   for(int y = 0; y < nY; y++){
     for(int x = 0; x < nX; x++){
-      esdm_write_req_pack_float(ew, i_matrix[x + boundarySize[0]][boundarySize[2] + y]);
+      esdm_wstream_pack(ew, i_matrix[x + boundarySize[0]][boundarySize[2] + y]);
     }
   }
-  ret = esdm_write_req_commit(ew);
+  esdm_wstream_commit(ew);
 }
 
 /**
@@ -243,13 +237,9 @@ void io::ESDMWriter::writeVarTimeIndependent( const Float2D &i_matrix, esdm_data
   int64_t offset[] = {offsetY, offsetX};
 
 
-  esdm_dataspace_t *dspace;
   esdm_status ret;
-  ret = esdm_dataspace_create_full(2, size, offset, SMD_DTYPE_FLOAT, & dspace);
-
-  esdm_write_request_t * ew;
-  ret = esdm_write_req_start(& ew, dset, dspace);
-  checkRet(ret);
+  esdm_wstream_float_t ew;
+  esdm_wstream_start(& ew, dset, 2, offset, size);
 
 	//for(unsigned int col = 0; col < nX; col++) {
 	//	// nc_put_vara_float(dataFile, i_ncVariable, start, count,	&i_matrix[col+boundarySize[0]][boundarySize[2]]); //write col
@@ -257,10 +247,10 @@ void io::ESDMWriter::writeVarTimeIndependent( const Float2D &i_matrix, esdm_data
   //}
   for(int y = 0; y < nY; y++){
     for(int x = 0; x < nX; x++){
-      esdm_write_req_pack_float(ew, i_matrix[x + boundarySize[0]][boundarySize[2] + y]);
+      esdm_wstream_pack(ew, i_matrix[x + boundarySize[0]][boundarySize[2] + y]);
     }
   }
-  ret = esdm_write_req_commit(ew);
+  esdm_wstream_commit(ew);
 }
 
 /**
