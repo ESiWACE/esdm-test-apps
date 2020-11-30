@@ -21,6 +21,6 @@ $CXX -o build/SWE_gnu_release_mpi_fwave.nc build/*.o Writer.o NetCdfWriter.o $LD
 # Test using ESDM:
 $CXX -o ESDMWriter.o -c $CFLAGS -I. -ISWE/src/writer/ ESDMWriter.cpp
 $CXX -o Writer-ESDM.o -c $CFLAGS -DWRITEESDM -I. -ISWE/src/writer/ Writer.cpp
-$CXX -o build/SWE_gnu_release_mpi_fwave.esdm build/*.o Writer-ESDM.o ESDMWriter.o $LDFLAGS -lesdmmpi -lesdm -lesdmutils -lsmd
+$CXX -o build/SWE_gnu_release_mpi_fwave.esdm build/*.o Writer-ESDM.o ESDMWriter.o $LDFLAGS -lesdmmpi -lesdm -lsmd
 
 #  mpiexec -np 2 ./build/SWE_gnu_release_mpi_fwave -x 1024 -y 1024 -o "esdm://test" -c 2
