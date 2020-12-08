@@ -11,15 +11,12 @@ function extract(){
   plus=$(echo $perf | sed "s/[^+]//g" | wc -c)
   echo -n $(basename $f | sed 's/\(.*\)-\([^-]*\)-\([^-]*\).txt/\1 \2 \3/') | sed "s/.conf//"
   echo -n " $t "
-  echo -n "("
+  echo -n "=("
   echo -n $perf
   echo    ")/$plus"
 }
 
 for f in $@ ; do
-  extract read $f
-done
-
-for f in $@ ; do
   extract write $f
+  extract read $f
 done
