@@ -17,6 +17,9 @@ function extract(){
 }
 
 for f in $@ ; do
-  extract write $f
   extract read $f
+done
+
+for f in $@ ; do
+  extract write $f
 done
